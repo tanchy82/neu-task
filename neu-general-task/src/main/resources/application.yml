@@ -1,0 +1,53 @@
+server:
+  port: 16666
+  undertow:
+    buffer-size: 2048
+    buffer-per-region: 1024
+    threads:
+      io: 4
+
+logging:
+  config: classpath:config/logback-neu.xml
+
+spring:
+  application:
+    name: neu-task
+  redis:
+    lettuce:
+      pool:
+        minIdle: 1
+        maxIdle: 8
+        time-between-eviction-runs: 60000
+        max-active: 8
+        max-wait: -1
+    host: huaweioldtan
+    password: oldtan
+    port: 6379
+    timeout: 6000
+  cache:
+    type: redis
+    redis:
+      cache-null-values: false
+      key-prefix: neuTask-
+      time-to-live: 600000
+  datasource:
+    type: com.alibaba.druid.pool.DruidDataSource
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://huaweioldtan:3306/test?useUnicode=true&characterEncoding=utf8&useSSL=false&useLegacyDatetimeCode=false&serverTimezone=Asia/Shanghai
+    username: root
+    password: oldtan
+    druid:
+      initial-size: 2
+      max-active: 4
+      min-idle: 1
+      max-wait: 60000
+  jpa:
+    show-sql: true
+    database-platform: org.hibernate.dialect.MySQL5InnoDBDialect
+
+springfox:
+  documentation:
+    swagger-ui:
+      enabled: true
+      base-url: /api
+
