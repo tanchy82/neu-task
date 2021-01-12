@@ -9,7 +9,7 @@ import springfox.documentation.spi.DocumentationType;
 import springfox.documentation.spring.web.plugins.Docket;
 
 /**
- * @Description: TODO
+ * @Description: Integrated Swagger2
  * @Author: tanchuyue
  * @Date: 20-12-31
  */

@@ -18,7 +18,7 @@ import org.springframework.web.servlet.config.annotation.ViewControllerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
- * @Description: TODO
+ * @Description: Web Mvc Config
  * @Author: tanchuyue
  * @Date: 20-12-31
  */

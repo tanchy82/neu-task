@@ -10,7 +10,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import java.util.concurrent.Executor;
 
 /**
- * @Description: asynchronous thread pool
+ * @Description: Asynchronous thread pool
  * @Author: tanchuyue
  * @Date: 20-12-31
  */
