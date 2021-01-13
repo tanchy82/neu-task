@@ -1,11 +1,9 @@
 package com.oldtan.neu.dynamicdataservice.api;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.oldtan.config.util.PageUtil;
-import com.oldtan.neu.dynamicdataservice.api.dto.DynamicDatasourceDto;
 import com.oldtan.neu.dynamicdataservice.constant.Constant;
 import com.oldtan.neu.dynamicdataservice.model.SqlDataSourceModel;
-import com.oldtan.neu.dynamicdataservice.service.SqlDynamicDataSource;
+import com.oldtan.neu.dynamicdataservice.service.SqlDynamicDataSourcePool;
 import com.oldtan.neu.model.entity.DynamicDatasource;
 import com.oldtan.neu.model.repository.DynamicDatasourceRepository;
 import io.swagger.annotations.Api;
@@ -37,7 +35,7 @@ import java.util.stream.Stream;
 public class DynamicDataSourceRest {
 
     @Autowired
-    private SqlDynamicDataSource sqlDynamicDataSource;
+    private SqlDynamicDataSourcePool sqlDynamicDataSourcePool;
 
     @Autowired
     private DynamicDatasourceRepository dynamicDatasourceRepository;
@@ -47,29 +45,32 @@ public class DynamicDataSourceRest {
     @PostMapping
     @ApiOperation(value = "Create new data source and  return data source model json values. But if exist used exist data source.")
     @SneakyThrows
-    public @ApiParam DynamicDatasourceDto create(@Validated @RequestBody @ApiParam DynamicDatasourceDto datasourceDto){
+    public @ApiParam DynamicDatasource create(@Validated @RequestBody @ApiParam DynamicDatasource datasourceDto){
         /** 1、business logic check */
         Stream.of(datasourceDto.getDbType())
                 .filter((s) -> Constant.SQL_DATABASE_DRIVER_CLASS.get(s) != null).findAny()
                 .orElseThrow(() -> new RuntimeException(
                         String.format("The data base type is not support.【 %s 】", datasourceDto.toString())));
-        Consumer<String> checkIdConsumer = (s) ->
-                Stream.of(s).filter((s1) -> dynamicDatasourceRepository.existsById(s1)).findAny()
-                      .ifPresent((s1) -> {throw new RuntimeException(
-                              String.format("The data source key id is exist.【 %s 】", datasourceDto.toString()));});
-        checkIdConsumer.accept(datasourceDto.getId());
+        Consumer<DynamicDatasource> checkIdConsumer = (dto) ->
+                dynamicDatasourceRepository.findFirstByDbUrlAndDbTypeAndDbUsername(
+                        datasourceDto.getDbUrl(), datasourceDto.getDbType(), datasourceDto.getDbUsername())
+                .ifPresent((s1) -> { throw new RuntimeException(
+                              String.format("The data source url and username id is exist.【 %s 】", datasourceDto.toString()));});
+        checkIdConsumer.accept(datasourceDto);
         /** 2、 TODO must handler different type data base */
-        SqlDataSourceModel sqlDataSourceModel = sqlDynamicDataSource.changeVo(datasourceDto);
+        SqlDataSourceModel sqlDataSourceModel = sqlDynamicDataSourcePool.changeVo(datasourceDto);
 
         DynamicDatasource datasource = new DynamicDatasource();
         BeanUtils.copyProperties(datasourceDto, datasource);
-        datasource.setDbConnect(new ObjectMapper().writeValueAsString(datasourceDto.getDbConnect()));
         lock.lock();
         try {
-            checkIdConsumer.accept(datasourceDto.getId());
-            sqlDynamicDataSource.create(sqlDataSourceModel);
-            datasource.setCreateTime(LocalDateTime.now());
-            dynamicDatasourceRepository.save(datasource);
+            checkIdConsumer.accept(datasourceDto);
+            sqlDataSourceModel = sqlDynamicDataSourcePool.create(sqlDataSourceModel);
+            if (sqlDataSourceModel.getId().equalsIgnoreCase(datasourceDto.getId())){
+                datasource.setCreateTime(LocalDateTime.now());
+                dynamicDatasourceRepository.save(datasource);
+            }
+            datasourceDto.setId(sqlDataSourceModel.getId());
         }finally {
             lock.unlock();
         }
@@ -99,7 +100,7 @@ public class DynamicDataSourceRest {
             lock.lock();
             try {
                 /** TODO must handler different type data base */
-                sqlDynamicDataSource.delete(id);
+                sqlDynamicDataSourcePool.delete(id);
                 dynamicDatasourceRepository.deleteById(id);
             }finally {
                 lock.unlock();

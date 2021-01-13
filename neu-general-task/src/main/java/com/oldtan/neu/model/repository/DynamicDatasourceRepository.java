@@ -5,6 +5,8 @@ import com.oldtan.neu.model.entity.DynamicDatasource;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.Optional;
+
 /**
  * @Description: TODO
  * @Author: tanchuyue
@@ -12,4 +14,7 @@ import org.springframework.stereotype.Repository;
  */
 @Repository
 public interface DynamicDatasourceRepository extends JpaRepository<DynamicDatasource, String> {
+
+    Optional<DynamicDatasource> findFirstByDbUrlAndDbTypeAndDbUsername(String dbUrl, String dbType, String dbUsername);
+
 }

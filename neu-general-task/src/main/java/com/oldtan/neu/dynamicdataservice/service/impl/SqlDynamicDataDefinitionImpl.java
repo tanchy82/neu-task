@@ -26,9 +26,9 @@ public class SqlDynamicDataDefinitionImpl implements SqlDynamicDataDefinition {
     public Optional<SqlDataDefinitionModel> isExist(SqlDataDefinitionModel definitionModel) {
         Assert.notNull(definitionModel, "definitionModel parameter is not null.");
         return dataDefinitionSet.stream()
-                .filter((model) -> model.getSqlDataSourceModel().getUrl().equalsIgnoreCase(definitionModel.getSqlDataSourceModel().getUrl()))
+                .filter((model) -> model.getSqlDataSourceModel().getDbUrl().equalsIgnoreCase(definitionModel.getSqlDataSourceModel().getDbUrl()))
                 .filter((model) -> model.getSqlDataSourceModel().getDriverClassName().equalsIgnoreCase(definitionModel.getSqlDataSourceModel().getDriverClassName()))
-                .filter((model) -> model.getSqlDataSourceModel().getUsername().equalsIgnoreCase(definitionModel.getSqlDataSourceModel().getUsername()))
+                .filter((model) -> model.getSqlDataSourceModel().getDbUsername().equalsIgnoreCase(definitionModel.getSqlDataSourceModel().getDbUsername()))
                 .filter((model) -> model.getName().equalsIgnoreCase(definitionModel.getName()))
                 .filter((model) -> model.getId().equalsIgnoreCase(definitionModel.getId()))
                 .findAny();

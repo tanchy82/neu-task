@@ -12,7 +12,8 @@ import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import javax.persistence.*;
+import javax.persistence.Entity;
+import javax.persistence.Id;
 import javax.validation.constraints.NotNull;
 import java.io.Serializable;
 import java.time.LocalDateTime;
@@ -32,7 +33,6 @@ public class DynamicDatasource implements Serializable {
     @Id
     @NotNull
     @ApiModelProperty("Primary key id.")
-    @GeneratedValue(strategy= GenerationType.IDENTITY)
     private String id;
 
     @NotNull
@@ -40,9 +40,16 @@ public class DynamicDatasource implements Serializable {
     private String dbType;
 
     @NotNull
+    @ApiModelProperty("Data base url.")
+    private String dbUrl;
+
+    @NotNull
+    @ApiModelProperty("Data base username.")
+    private String dbUsername;
+
+    @NotNull
     @ApiModelProperty("Data base connect info.")
-    @Column(columnDefinition="text")
-    private String dbConnect;
+    private String dbPassword;
 
     @JsonFormat(pattern="yyyy-MM-dd HH:mm:ss", timezone="GMT+8")
     @JsonDeserialize(using = LocalDateTimeDeserializer.class)

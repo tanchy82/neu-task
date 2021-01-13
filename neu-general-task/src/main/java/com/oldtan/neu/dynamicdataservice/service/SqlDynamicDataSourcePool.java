@@ -1,17 +1,16 @@
 package com.oldtan.neu.dynamicdataservice.service;
 
-import com.oldtan.neu.dynamicdataservice.api.dto.DynamicDatasourceDto;
 import com.oldtan.neu.dynamicdataservice.model.SqlDataSourceModel;
+import com.oldtan.neu.model.entity.DynamicDatasource;
 
 import java.sql.SQLException;
-import java.util.Collection;
 
 /**
  * @Description: Dynamic DataSource interface
  * @Author: tanchuyue
  * @Date: 20-12-11
  */
-public interface SqlDynamicDataSource {
+public interface SqlDynamicDataSourcePool {
 
     /**
      * Create sql Data source
@@ -26,7 +25,7 @@ public interface SqlDynamicDataSource {
      * @param datasourceDto
      * @return
      */
-    SqlDataSourceModel changeVo(DynamicDatasourceDto datasourceDto);
+    SqlDataSourceModel changeVo(DynamicDatasource datasourceDto);
 
     /**
      * Delete Data source
@@ -47,11 +46,5 @@ public interface SqlDynamicDataSource {
      * @return
      */
     SqlDataSourceModel get(String id);
-
-    /**
-     * Query all SqlDataSourceModel set or list.
-     * @return
-     */
-    Collection<SqlDataSourceModel> findAll();
 
 }

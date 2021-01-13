@@ -3,7 +3,7 @@ package com.oldtan.neu.dynamicdataservice.api;
 import cn.hutool.core.collection.CollectionUtil;
 import com.oldtan.neu.dynamicdataservice.model.SqlDataDefinitionModel;
 import com.oldtan.neu.dynamicdataservice.service.SqlDynamicDataDefinition;
-import com.oldtan.neu.dynamicdataservice.service.SqlDynamicDataSource;
+import com.oldtan.neu.dynamicdataservice.service.SqlDynamicDataSourcePool;
 import com.oldtan.neu.dynamicdataservice.service.SqlExecute;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -29,7 +29,7 @@ public class DataDefinitionRest {
     private SqlDynamicDataDefinition sqlDynamicDataDefinition;
 
     @Autowired
-    private SqlDynamicDataSource sqlDynamicDataSource;
+    private SqlDynamicDataSourcePool sqlDynamicDataSourcePool;
 
     @Autowired
     private SqlExecute sqlExecute;
@@ -64,7 +64,7 @@ public class DataDefinitionRest {
                     .body(optional.get()));
         }
         try {
-            model.setSqlDataSourceModel(sqlDynamicDataSource.create(model.getSqlDataSourceModel()));
+            model.setSqlDataSourceModel(sqlDynamicDataSourcePool.create(model.getSqlDataSourceModel()));
             sqlExecute.getCount(model);
             sqlDynamicDataDefinition.create(model);
             return Mono.just(ResponseEntity.ok().body(model));

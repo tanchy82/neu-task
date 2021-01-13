@@ -17,7 +17,7 @@ import javax.validation.constraints.NotBlank;
 public class SqlDataSourceModel {
 
     @NotBlank
-    private String id, url, username, password, driverClassName, databaseType;
+    private String id, dbUrl, dbUsername, dbPassword, driverClassName, dbType;
 
     @JsonIgnore
     private DruidDataSource dataSource;

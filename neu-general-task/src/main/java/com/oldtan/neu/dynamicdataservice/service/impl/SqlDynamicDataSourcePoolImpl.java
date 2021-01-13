@@ -1,13 +1,12 @@
 package com.oldtan.neu.dynamicdataservice.service.impl;
 
-import cn.hutool.core.collection.ConcurrentHashSet;
 import com.alibaba.druid.pool.DruidDataSource;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.oldtan.neu.dynamicdataservice.api.dto.DynamicDatasourceDto;
 import com.oldtan.neu.dynamicdataservice.constant.Constant;
 import com.oldtan.neu.dynamicdataservice.model.SqlDataSourceModel;
 import com.oldtan.neu.dynamicdataservice.service.SqlDynamicDataDefinition;
-import com.oldtan.neu.dynamicdataservice.service.SqlDynamicDataSource;
+import com.oldtan.neu.dynamicdataservice.service.SqlDynamicDataSourcePool;
+import com.oldtan.neu.model.entity.DynamicDatasource;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,9 +14,10 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.Assert;
 
 import java.sql.SQLException;
-import java.util.Collection;
 import java.util.Optional;
-import java.util.Set;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 /**
@@ -27,19 +27,17 @@ import java.util.function.Supplier;
  */
 @Component
 @Slf4j
-public class SqlDynamicDataSourceImpl implements SqlDynamicDataSource {
+public class SqlDynamicDataSourcePoolImpl implements SqlDynamicDataSourcePool {
 
-    private Set<SqlDataSourceModel> dataSourceModelSet = new ConcurrentHashSet<>(10);
+    private BlockingQueue<SqlDataSourceModel> dataSourceQueue = new ArrayBlockingQueue(10);
 
     @Autowired
     private SqlDynamicDataDefinition sqlDynamicDataDefinition;
 
     @Override
-    public SqlDataSourceModel changeVo(DynamicDatasourceDto datasourceDto){
-        SqlDataSourceModel vo = new ObjectMapper().convertValue(datasourceDto.getDbConnect(), SqlDataSourceModel.class);
-        vo.setDatabaseType(datasourceDto.getDbType());
+    public SqlDataSourceModel changeVo(DynamicDatasource datasourceDto){
+        SqlDataSourceModel vo = new ObjectMapper().convertValue(datasourceDto, SqlDataSourceModel.class);
         vo.setDriverClassName(Constant.SQL_DATABASE_DRIVER_CLASS.get(datasourceDto.getDbType()));
-        vo.setId(datasourceDto.getId());
         return vo;
     }
 
@@ -51,9 +49,9 @@ public class SqlDynamicDataSourceImpl implements SqlDynamicDataSource {
             DruidDataSource druidDataSource = new DruidDataSource();
             druidDataSource.setName(dataSourceModel.getId());
             druidDataSource.setDriverClassName(dataSourceModel.getDriverClassName());//com.mysql.cj.jdbc.Driver
-            druidDataSource.setUrl(dataSourceModel.getUrl()); //"jdbc:mysql://124.70.93.116:3306"
-            druidDataSource.setUsername(dataSourceModel.getUsername());
-            druidDataSource.setPassword(dataSourceModel.getPassword());
+            druidDataSource.setUrl(dataSourceModel.getDbUrl()); //"jdbc:mysql://124.70.93.116:3306"
+            druidDataSource.setUsername(dataSourceModel.getDbUsername());
+            druidDataSource.setPassword(dataSourceModel.getDbPassword());
             druidDataSource.setInitialSize(1);
             druidDataSource.setMaxActive(2);
             druidDataSource.setMaxWait(60000);
@@ -77,27 +75,34 @@ public class SqlDynamicDataSourceImpl implements SqlDynamicDataSource {
             return druidDataSource;
         };
 
-        Optional<SqlDataSourceModel> optional = Optional.ofNullable(dataSourceModelSet.stream()
-                .filter((m) -> m.getDriverClassName().equalsIgnoreCase(dataSourceModel.getDriverClassName()))
-                .filter((m) -> m.getUsername().equalsIgnoreCase(dataSourceModel.getUsername()))
-                .filter((m) -> m.getUrl().equalsIgnoreCase(dataSourceModel.getUrl()))
-                .findFirst().orElseGet(() -> {
-                    Optional.of(supplier.get()).ifPresent((source) -> {
-                        dataSourceModel.setDataSource(source);
-                        dataSourceModelSet.add(dataSourceModel);
-                    });
-                    return dataSourceModel;
-        }));
+        Function<DruidDataSource, SqlDataSourceModel> f = (dds) -> {
+            dataSourceModel.setDataSource(dds);
+            if (dataSourceQueue.remainingCapacity() < 1)  {
+                try {
+                    dataSourceQueue.take().getDataSource().close();
+                }catch (InterruptedException e){
+                    log.warn("Retrieves and removes the head of this dataSourceQueue, but an element becomes available.");
+                }
+            }
+            dataSourceQueue.offer(dataSourceModel) ;
+            return dataSourceModel;
+        };
+
+        Optional<SqlDataSourceModel> optional = Optional.ofNullable(dataSourceQueue.stream()
+                .filter((m) -> m.getDbType().equalsIgnoreCase(dataSourceModel.getDbType()))
+                .filter((m) -> m.getDbUrl().equalsIgnoreCase(dataSourceModel.getDbUrl()))
+                .filter((m) -> m.getDbUsername().equalsIgnoreCase(dataSourceModel.getDbUsername()))
+                .findFirst().orElseGet(() -> f.apply(supplier.get())));
         return optional.get();
     }
 
     @Override
     public void delete(String id) {
         Assert.notNull(id, "SqlDataSourceModel id is not null.");
-        dataSourceModelSet.stream().filter((model) -> id.equalsIgnoreCase(model.getId())).findAny()
+        dataSourceQueue.stream().filter((model) -> id.equalsIgnoreCase(model.getId())).findAny()
                 .ifPresent((model) -> {
                     model.getDataSource().close();
-                    dataSourceModelSet.remove(model);
+                    dataSourceQueue.remove(model);
                     sqlDynamicDataDefinition.deleteByDataSourceId(id);
                     log.info(String.format("Delete dataSourceModel id is %s", id));
         });
@@ -105,19 +110,13 @@ public class SqlDynamicDataSourceImpl implements SqlDynamicDataSource {
 
     @Override
     public boolean isExist(String id){
-        return dataSourceModelSet.stream()
-                .filter((model) -> id.equalsIgnoreCase(model.getId())).findAny().isPresent() ? true : false;
+        return dataSourceQueue.stream().filter((model) -> id.equalsIgnoreCase(model.getId())).findAny().isPresent() ? true : false;
     }
 
     @Override
     public SqlDataSourceModel get(String id) {
         Assert.notNull(id, "SqlDataSourceModel id is not null.");
-        return dataSourceModelSet.stream().filter((model) -> id.equalsIgnoreCase(model.getId())).findFirst().get();
-    }
-
-    @Override
-    public Collection<SqlDataSourceModel> findAll(){
-        return dataSourceModelSet;
+        return dataSourceQueue.stream().filter((model) -> id.equalsIgnoreCase(model.getId())).findFirst().get();
     }
 
 }
