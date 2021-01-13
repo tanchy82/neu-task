@@ -1,7 +1,8 @@
 package com.oldtan.neu.dynamicdataservice.service.impl;
 
-import cn.hutool.core.bean.BeanUtil;
+import cn.hutool.core.collection.ConcurrentHashSet;
 import com.alibaba.druid.pool.DruidDataSource;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.oldtan.neu.dynamicdataservice.api.dto.DynamicDatasourceDto;
 import com.oldtan.neu.dynamicdataservice.constant.Constant;
 import com.oldtan.neu.dynamicdataservice.model.SqlDataSourceModel;
@@ -17,7 +18,6 @@ import java.sql.SQLException;
 import java.util.Collection;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.function.Supplier;
 
 /**
@@ -29,16 +29,17 @@ import java.util.function.Supplier;
 @Slf4j
 public class SqlDynamicDataSourceImpl implements SqlDynamicDataSource {
 
-    private Set<SqlDataSourceModel> dataSourceModelSet = new ConcurrentSkipListSet<>();
+    private Set<SqlDataSourceModel> dataSourceModelSet = new ConcurrentHashSet<>(10);
 
     @Autowired
     private SqlDynamicDataDefinition sqlDynamicDataDefinition;
 
     @Override
     public SqlDataSourceModel changeVo(DynamicDatasourceDto datasourceDto){
-        SqlDataSourceModel vo = BeanUtil.copyProperties(datasourceDto.getDbConnect(), SqlDataSourceModel.class);
+        SqlDataSourceModel vo = new ObjectMapper().convertValue(datasourceDto.getDbConnect(), SqlDataSourceModel.class);
         vo.setDatabaseType(datasourceDto.getDbType());
-        vo.setDriverClassName(Constant.sqlDatabaseDriverClass.get(datasourceDto.getDbType()));
+        vo.setDriverClassName(Constant.SQL_DATABASE_DRIVER_CLASS.get(datasourceDto.getDbType()));
+        vo.setId(datasourceDto.getId());
         return vo;
     }
 
@@ -70,9 +71,8 @@ public class SqlDynamicDataSourceImpl implements SqlDynamicDataSource {
                 druidDataSource.init();
                 log.info(String.format("%s datasource initialization success.", dataSourceModel.toString()));
             } catch (SQLException e) {
-                log.error(String.format("%s datasource initialization failure.", dataSourceModel.toString()), e);
                 druidDataSource.close();
-                throw new RuntimeException(e);
+                throw new RuntimeException(String.format("%s datasource initialization failure.", dataSourceModel.toString()), e);
             }
             return druidDataSource;
         };

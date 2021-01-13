@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
+import lombok.ToString;
 
 import javax.validation.constraints.NotNull;
 import java.io.Serializable;
@@ -15,6 +16,7 @@ import java.io.Serializable;
  */
 @Data
 @ApiModel("Dynamic data source dto object.")
+@ToString
 public class DynamicDatasourceDto implements Serializable {
 
     @ApiModelProperty("Dynamic data source primary key id.")

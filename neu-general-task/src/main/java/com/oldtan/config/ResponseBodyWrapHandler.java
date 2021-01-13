@@ -34,4 +34,8 @@ public class ResponseBodyWrapHandler implements HandlerMethodReturnValueHandler 
         }
         delegate.handleReturnValue(response, returnType, modelAndViewContainer, nativeWebRequest);
     }
+
+    public void setDelegate(HandlerMethodReturnValueHandler delegate) {
+        this.delegate = delegate;
+    }
 }

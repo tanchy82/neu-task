@@ -10,11 +10,11 @@ import java.util.Map;
  */
 public class Constant {
 
-    public final static Map<String, String> sqlDatabaseDriverClass = new HashMap<>();
+    public final static Map<String, String> SQL_DATABASE_DRIVER_CLASS = new HashMap<>();
 
     static {
-        sqlDatabaseDriverClass.put("mysql", "com.mysql.cj.jdbc.Driver");
-        sqlDatabaseDriverClass.put("oracle", "com.mysql.cj.jdbc.Driver");
+        SQL_DATABASE_DRIVER_CLASS.put("mysql", "com.mysql.cj.jdbc.Driver");
+        SQL_DATABASE_DRIVER_CLASS.put("oracle", "com.mysql.cj.jdbc.Driver");
     }
 
 }

@@ -10,9 +10,9 @@ import com.fasterxml.jackson.datatype.jsr310.ser.LocalDateTimeSerializer;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
-import javax.persistence.Entity;
-import javax.persistence.Id;
+import javax.persistence.*;
 import javax.validation.constraints.NotNull;
 import java.io.Serializable;
 import java.time.LocalDateTime;
@@ -26,11 +26,13 @@ import java.time.LocalDateTime;
 @Data
 @JsonIgnoreProperties(value={"hibernateLazyInitializer","handler","fieldHandler"})
 @ApiModel(value = "Dynamic data source entity.")
+@NoArgsConstructor
 public class DynamicDatasource implements Serializable {
 
     @Id
     @NotNull
     @ApiModelProperty("Primary key id.")
+    @GeneratedValue(strategy= GenerationType.IDENTITY)
     private String id;
 
     @NotNull
@@ -39,6 +41,7 @@ public class DynamicDatasource implements Serializable {
 
     @NotNull
     @ApiModelProperty("Data base connect info.")
+    @Column(columnDefinition="text")
     private String dbConnect;
 
     @JsonFormat(pattern="yyyy-MM-dd HH:mm:ss", timezone="GMT+8")

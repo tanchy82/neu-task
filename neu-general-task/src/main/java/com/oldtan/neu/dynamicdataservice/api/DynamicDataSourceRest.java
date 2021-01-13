@@ -1,27 +1,29 @@
 package com.oldtan.neu.dynamicdataservice.api;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.oldtan.config.util.PageUtil;
 import com.oldtan.neu.dynamicdataservice.api.dto.DynamicDatasourceDto;
 import com.oldtan.neu.dynamicdataservice.constant.Constant;
+import com.oldtan.neu.dynamicdataservice.model.SqlDataSourceModel;
 import com.oldtan.neu.dynamicdataservice.service.SqlDynamicDataSource;
 import com.oldtan.neu.model.entity.DynamicDatasource;
 import com.oldtan.neu.model.repository.DynamicDatasourceRepository;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import org.springframework.data.domain.Page;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
-import reactor.core.publisher.Mono;
 
 import javax.validation.constraints.NotBlank;
-import java.sql.SQLException;
 import java.time.LocalDateTime;
-import java.util.Optional;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.Supplier;
+import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 /**
  * @Description: TODO
@@ -44,70 +46,67 @@ public class DynamicDataSourceRest {
 
     @PostMapping
     @ApiOperation(value = "Create new data source and  return data source model json values. But if exist used exist data source.")
-    public DynamicDatasource create(@Validated @RequestBody @ApiParam DynamicDatasourceDto datasourceDto){
-        Supplier<DynamicDatasource> supplier = () -> {
-            DynamicDatasource datasource = new DynamicDatasource();
-            sqlDynamicDataSource.get(datasourceDto.getId());
-            if (Constant.sqlDatabaseDriverClass.get(datasourceDto.getDbType()) != null){
-                datasource.setId(datasourceDto.getId());
-                datasource.setDbType(datasourceDto.getDbType());
-                datasource.setDbConnect(datasourceDto.getDbConnect().asText());
-                lock.lock();
-                try {
-                    if (Constant.sqlDatabaseDriverClass.get(datasourceDto.getDbType()) != null){
-                        sqlDynamicDataSource.create(sqlDynamicDataSource.changeVo(datasourceDto));
-                        datasource.setCreateTime(LocalDateTime.now());
-                        dynamicDatasourceRepository.save(datasource);
-                    }
-                } catch (SQLException e) {
-                    throw new RuntimeException(e);
-                } finally {
-                    lock.unlock();
-                }
-            }
-            return datasource;
-        };
-        Optional<DynamicDatasource> optional =
-                Optional.ofNullable(Optional.ofNullable(dynamicDatasourceRepository.getOne(datasourceDto.getId()))
-                        .orElseGet(supplier));
-        return optional.get();
-        /*try {
-            return Mono.just(ResponseEntity.ok().body(sqlDynamicDataSource.create(sourceModel)));
-        } catch (Exception e) {
-            return Mono.just(ResponseEntity.unprocessableEntity()
-                    .body(String.format("Datasource initialization failure. %s", e.getMessage())));
-        }*/
+    @SneakyThrows
+    public @ApiParam DynamicDatasourceDto create(@Validated @RequestBody @ApiParam DynamicDatasourceDto datasourceDto){
+        /** 1、business logic check */
+        Stream.of(datasourceDto.getDbType())
+                .filter((s) -> Constant.SQL_DATABASE_DRIVER_CLASS.get(s) != null).findAny()
+                .orElseThrow(() -> new RuntimeException(
+                        String.format("The data base type is not support.【 %s 】", datasourceDto.toString())));
+        Consumer<String> checkIdConsumer = (s) ->
+                Stream.of(s).filter((s1) -> dynamicDatasourceRepository.existsById(s1)).findAny()
+                      .ifPresent((s1) -> {throw new RuntimeException(
+                              String.format("The data source key id is exist.【 %s 】", datasourceDto.toString()));});
+        checkIdConsumer.accept(datasourceDto.getId());
+        /** 2、 TODO must handler different type data base */
+        SqlDataSourceModel sqlDataSourceModel = sqlDynamicDataSource.changeVo(datasourceDto);
+
+        DynamicDatasource datasource = new DynamicDatasource();
+        BeanUtils.copyProperties(datasourceDto, datasource);
+        datasource.setDbConnect(new ObjectMapper().writeValueAsString(datasourceDto.getDbConnect()));
+        lock.lock();
+        try {
+            checkIdConsumer.accept(datasourceDto.getId());
+            sqlDynamicDataSource.create(sqlDataSourceModel);
+            datasource.setCreateTime(LocalDateTime.now());
+            dynamicDatasourceRepository.save(datasource);
+        }finally {
+            lock.unlock();
+        }
+        return datasourceDto;
     }
 
-
     @GetMapping("/{id}")
-    @ApiOperation("Search data source model by id from path variable parameter.")
-    public Mono<Object> find(@PathVariable @NotBlank String id){
-        if (sqlDynamicDataSource.isExist(id)){
-            return Mono.just(ResponseEntity.ok()
-                    .body(sqlDynamicDataSource.get(id)));
-        }else {
-            return Mono.just(ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
-                    .body(String.format("id=%s DataSource is not exist.", id)));
-        }
+    @ApiOperation("Search a single data source model by id from path variable parameter.")
+    @SneakyThrows
+    public @ApiParam DynamicDatasource find(@PathVariable @NotBlank @ApiParam String id){
+        return dynamicDatasourceRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException(String.format("id=%s data source is not exist.", id)));
     }
 
     @GetMapping()
     @ApiOperation("Page Search data source model.")
-    public Mono<Object> findAll(){
-        //todo page search
-        return Mono.just(ResponseEntity.ok().body(sqlDynamicDataSource.findAll()));
+    public @ApiParam Page<DynamicDatasource> findAll(@RequestBody @ApiParam cn.hutool.db.Page page){
+        return dynamicDatasourceRepository.findAll(PageUtil.toPageRequest(page));
     }
 
     @DeleteMapping("/{id}")
     @ApiOperation("Delete data source model by id from path variable parameter.")
-    public Mono<Object> delete(@PathVariable @NotBlank String id){
-        if (sqlDynamicDataSource.isExist(id)){
-            sqlDynamicDataSource.delete(id);
-            return Mono.just(ResponseEntity.ok().body(String.format("id=%s DataSource deleted is success.",id)));
-        }
-        return Mono.just(ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
-                .body(String.format("id=%s DataSource is not exist.", id)));
+    public @ApiParam String delete(@PathVariable @NotBlank @ApiParam String id){
+        Consumer<String> consumer = (s) -> dynamicDatasourceRepository.findById(s)
+                .orElseThrow(() -> new RuntimeException(String.format("id=%s dataSource is not exist.", s)));
+        consumer = consumer.andThen((s) -> {
+            lock.lock();
+            try {
+                /** TODO must handler different type data base */
+                sqlDynamicDataSource.delete(id);
+                dynamicDatasourceRepository.deleteById(id);
+            }finally {
+                lock.unlock();
+            }
+        });
+        consumer.accept(id);
+        return String.format("id=%s DataSource deleted is success.",id);
     }
 
 }
