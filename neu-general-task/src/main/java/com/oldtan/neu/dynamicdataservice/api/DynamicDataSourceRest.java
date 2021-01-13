@@ -11,7 +11,6 @@ import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.validation.annotation.Validated;
@@ -45,7 +44,7 @@ public class DynamicDataSourceRest {
     @PostMapping
     @ApiOperation(value = "Create new data source and  return data source model json values. But if exist used exist data source.")
     @SneakyThrows
-    public @ApiParam DynamicDatasource create(@Validated @RequestBody @ApiParam DynamicDatasource datasourceDto){
+    public @ApiParam DynamicDatasource create(@Validated @RequestBody @ApiParam final DynamicDatasource datasourceDto){
         /** 1、business logic check */
         Stream.of(datasourceDto.getDbType())
                 .filter((s) -> Constant.SQL_DATABASE_DRIVER_CLASS.get(s) != null).findAny()
@@ -60,21 +59,15 @@ public class DynamicDataSourceRest {
         /** 2、 TODO must handler different type data base */
         SqlDataSourceModel sqlDataSourceModel = sqlDynamicDataSourcePool.changeVo(datasourceDto);
 
-        DynamicDatasource datasource = new DynamicDatasource();
-        BeanUtils.copyProperties(datasourceDto, datasource);
         lock.lock();
         try {
             checkIdConsumer.accept(datasourceDto);
-            sqlDataSourceModel = sqlDynamicDataSourcePool.create(sqlDataSourceModel);
-            if (sqlDataSourceModel.getId().equalsIgnoreCase(datasourceDto.getId())){
-                datasource.setCreateTime(LocalDateTime.now());
-                dynamicDatasourceRepository.save(datasource);
-            }
-            datasourceDto.setId(sqlDataSourceModel.getId());
+            sqlDynamicDataSourcePool.create(sqlDataSourceModel);
+            datasourceDto.setCreateTime(LocalDateTime.now());
+            return dynamicDatasourceRepository.save(datasourceDto);
         }finally {
             lock.unlock();
         }
-        return datasourceDto;
     }
 
     @GetMapping("/{id}")

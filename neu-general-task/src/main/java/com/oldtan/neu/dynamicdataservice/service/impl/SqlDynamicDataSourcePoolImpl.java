@@ -1,7 +1,6 @@
 package com.oldtan.neu.dynamicdataservice.service.impl;
 
 import com.alibaba.druid.pool.DruidDataSource;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.oldtan.neu.dynamicdataservice.constant.Constant;
 import com.oldtan.neu.dynamicdataservice.model.SqlDataSourceModel;
 import com.oldtan.neu.dynamicdataservice.service.SqlDynamicDataDefinition;
@@ -9,6 +8,7 @@ import com.oldtan.neu.dynamicdataservice.service.SqlDynamicDataSourcePool;
 import com.oldtan.neu.model.entity.DynamicDatasource;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.util.Assert;
@@ -36,7 +36,8 @@ public class SqlDynamicDataSourcePoolImpl implements SqlDynamicDataSourcePool {
 
     @Override
     public SqlDataSourceModel changeVo(DynamicDatasource datasourceDto){
-        SqlDataSourceModel vo = new ObjectMapper().convertValue(datasourceDto, SqlDataSourceModel.class);
+        SqlDataSourceModel vo = new SqlDataSourceModel();
+        BeanUtils.copyProperties(datasourceDto, vo);
         vo.setDriverClassName(Constant.SQL_DATABASE_DRIVER_CLASS.get(datasourceDto.getDbType()));
         return vo;
     }

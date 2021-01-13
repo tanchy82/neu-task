@@ -5,7 +5,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Data;
 import lombok.ToString;
 
-import javax.validation.constraints.NotBlank;
+import java.io.Serializable;
 
 /**
  * @Description: TODO
@@ -14,9 +14,8 @@ import javax.validation.constraints.NotBlank;
  */
 @Data
 @ToString
-public class SqlDataSourceModel {
+public class SqlDataSourceModel implements Serializable {
 
-    @NotBlank
     private String id, dbUrl, dbUsername, dbPassword, driverClassName, dbType;
 
     @JsonIgnore
