@@ -1,15 +1,8 @@
 package com.oldtan.neu.dynamicdataservice.service.impl;
 
 import com.alibaba.druid.pool.DruidDataSource;
-import com.oldtan.neu.dynamicdataservice.constant.Constant;
-import com.oldtan.neu.dynamicdataservice.model.SqlDataSourceModel;
-import com.oldtan.neu.dynamicdataservice.service.SqlDynamicDataDefinition;
 import com.oldtan.neu.dynamicdataservice.service.SqlDynamicDataSourcePool;
-import com.oldtan.neu.model.entity.DynamicDatasource;
-import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.BeanUtils;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.util.Assert;
 
@@ -17,11 +10,13 @@ import java.sql.SQLException;
 import java.util.Optional;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
-import java.util.function.Function;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 
 /**
- * @Description: TODO
+ * @Description: Dynamic DataSource operating handler
  * @Author: tanchuyue
  * @Date: 20-12-11
  */
@@ -29,30 +24,24 @@ import java.util.function.Supplier;
 @Slf4j
 public class SqlDynamicDataSourcePoolImpl implements SqlDynamicDataSourcePool {
 
-    private BlockingQueue<SqlDataSourceModel> dataSourceQueue = new ArrayBlockingQueue(10);
+    private final BlockingQueue<SqlDynamicDataSourceVO> dataSourceQueue = new ArrayBlockingQueue(10);
 
-    @Autowired
-    private SqlDynamicDataDefinition sqlDynamicDataDefinition;
-
-    @Override
-    public SqlDataSourceModel changeVo(DynamicDatasource datasourceDto){
-        SqlDataSourceModel vo = new SqlDataSourceModel();
-        BeanUtils.copyProperties(datasourceDto, vo);
-        vo.setDriverClassName(Constant.SQL_DATABASE_DRIVER_CLASS.get(datasourceDto.getDbType()));
-        return vo;
-    }
+    private ReentrantLock lock = new ReentrantLock();
 
     @Override
-    @SneakyThrows
-    public SqlDataSourceModel create(SqlDataSourceModel dataSourceModel){
-        Assert.notNull(dataSourceModel, "Sql Data SourceModel parameter is not null.");
+    public SqlDynamicDataSourceVO create(final SqlDynamicDataSourceVO dynamicDataSourceVO) {
+        Assert.notNull(dynamicDataSourceVO, "This argument is required, it must not be null.");
+        /** 1、check is exist */
+        Optional<SqlDynamicDataSourceVO> optional =
+                dataSourceQueue.stream().filter((v) -> v.equals(dynamicDataSourceVO)).findAny();
+        /** 2、supplier DruidDataSource */
         Supplier<DruidDataSource> supplier = () -> {
             DruidDataSource druidDataSource = new DruidDataSource();
-            druidDataSource.setName(dataSourceModel.getId());
-            druidDataSource.setDriverClassName(dataSourceModel.getDriverClassName());//com.mysql.cj.jdbc.Driver
-            druidDataSource.setUrl(dataSourceModel.getDbUrl()); //"jdbc:mysql://124.70.93.116:3306"
-            druidDataSource.setUsername(dataSourceModel.getDbUsername());
-            druidDataSource.setPassword(dataSourceModel.getDbPassword());
+            druidDataSource.setName(dynamicDataSourceVO.getId());
+            druidDataSource.setDriverClassName(dynamicDataSourceVO.getDriverClassName());//com.mysql.cj.jdbc.Driver
+            druidDataSource.setUrl(dynamicDataSourceVO.getDbUrl()); //"jdbc:mysql://124.70.93.116:3306"
+            druidDataSource.setUsername(dynamicDataSourceVO.getDbUsername());
+            druidDataSource.setPassword(dynamicDataSourceVO.getDbPassword());
             druidDataSource.setInitialSize(1);
             druidDataSource.setMaxActive(2);
             druidDataSource.setMaxWait(60000);
@@ -68,56 +57,58 @@ public class SqlDynamicDataSourcePoolImpl implements SqlDynamicDataSourcePool {
             druidDataSource.setLogAbandoned(true);
             try {
                 druidDataSource.init();
-                log.info(String.format("%s datasource initialization success.", dataSourceModel.toString()));
+                log.info(String.format("%s datasource initialization success.", dynamicDataSourceVO.toString()));
             } catch (SQLException e) {
                 druidDataSource.close();
-                throw new RuntimeException(String.format("%s datasource initialization failure.", dataSourceModel.toString()), e);
+                throw new RuntimeException(String.format("%s datasource initialization failure.", dynamicDataSourceVO.toString()), e);
             }
             return druidDataSource;
         };
-
-        Function<DruidDataSource, SqlDataSourceModel> f = (dds) -> {
-            dataSourceModel.setDataSource(dds);
-            if (dataSourceQueue.remainingCapacity() < 1)  {
-                try {
-                    dataSourceQueue.take().getDataSource().close();
-                }catch (InterruptedException e){
-                    log.warn("Retrieves and removes the head of this dataSourceQueue, but an element becomes available.");
-                }
-            }
-            dataSourceQueue.offer(dataSourceModel) ;
-            return dataSourceModel;
+        /** 3、DruidDataSource queue operating */
+        Consumer<BlockingQueue<SqlDynamicDataSourceVO>> consumer = (dataSourceQueue) -> {
+            Stream.of(dataSourceQueue).filter((queue) -> queue.remainingCapacity() < 1).findFirst()
+                    .ifPresent((queue) -> {
+                        try {
+                            dataSourceQueue.take().getDataSource().close();
+                        }catch (InterruptedException e){
+                            log.warn("Retrieves and removes the head of this dataSourceQueue, but an element becomes available.");
+                        }
+                    });
+            dataSourceQueue.offer(dynamicDataSourceVO) ;
         };
-
-        Optional<SqlDataSourceModel> optional = Optional.ofNullable(dataSourceQueue.stream()
-                .filter((m) -> m.getDbType().equalsIgnoreCase(dataSourceModel.getDbType()))
-                .filter((m) -> m.getDbUrl().equalsIgnoreCase(dataSourceModel.getDbUrl()))
-                .filter((m) -> m.getDbUsername().equalsIgnoreCase(dataSourceModel.getDbUsername()))
-                .findFirst().orElseGet(() -> f.apply(supplier.get())));
-        return optional.get();
+        return optional.orElseGet(() -> {
+            lock.lock();
+            try {
+                return optional.orElseGet(() -> {
+                    dynamicDataSourceVO.setDataSource(supplier.get());
+                    consumer.accept(dataSourceQueue);
+                    return dynamicDataSourceVO;
+                });
+            } finally {
+                lock.unlock();
+            } });
     }
 
     @Override
     public void delete(String id) {
-        Assert.notNull(id, "SqlDataSourceModel id is not null.");
-        dataSourceQueue.stream().filter((model) -> id.equalsIgnoreCase(model.getId())).findAny()
-                .ifPresent((model) -> {
-                    model.getDataSource().close();
-                    dataSourceQueue.remove(model);
-                    sqlDynamicDataDefinition.deleteByDataSourceId(id);
-                    log.info(String.format("Delete dataSourceModel id is %s", id));
+        Assert.notNull(id, "This argument is required, it must not be null.");
+        dataSourceQueue.stream().filter((vo) -> id.equalsIgnoreCase(vo.getId())).findAny()
+                .ifPresent((vo) -> {
+                    vo.getDataSource().close();
+                    dataSourceQueue.remove(vo);
+                    log.info(String.format("Remove in the queue SqlDynamicDataSourceVO, id is %s ", id));
         });
     }
 
     @Override
     public boolean isExist(String id){
-        return dataSourceQueue.stream().filter((model) -> id.equalsIgnoreCase(model.getId())).findAny().isPresent() ? true : false;
+        return get(id).isPresent();
     }
 
     @Override
-    public SqlDataSourceModel get(String id) {
-        Assert.notNull(id, "SqlDataSourceModel id is not null.");
-        return dataSourceQueue.stream().filter((model) -> id.equalsIgnoreCase(model.getId())).findFirst().get();
+    public Optional<SqlDynamicDataSourceVO> get(String id) {
+        Assert.notNull(id, "This argument is required, it must not be null.");
+        return dataSourceQueue.stream().filter((vo) -> id.equalsIgnoreCase(vo.getId())).findAny();
     }
 
 }

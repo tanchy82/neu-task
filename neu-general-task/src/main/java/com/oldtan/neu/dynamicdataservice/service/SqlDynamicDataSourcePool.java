@@ -1,9 +1,12 @@
 package com.oldtan.neu.dynamicdataservice.service;
 
-import com.oldtan.neu.dynamicdataservice.model.SqlDataSourceModel;
-import com.oldtan.neu.model.entity.DynamicDatasource;
+import com.alibaba.druid.pool.DruidDataSource;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import lombok.*;
 
-import java.sql.SQLException;
+import java.io.Serializable;
+import java.util.Optional;
+import java.util.function.Predicate;
 
 /**
  * @Description: Dynamic DataSource interface
@@ -14,37 +17,54 @@ public interface SqlDynamicDataSourcePool {
 
     /**
      * Create sql Data source
-     * @param dataSourceModel
-     * @return
-     * @throws SQLException
-     */
-    SqlDataSourceModel create(SqlDataSourceModel dataSourceModel)throws SQLException;
-
-    /**
-     * Change datasourceDto to SqlDataSourceModel
-     * @param datasourceDto
+     * @param dynamicDataSourceVO
      * @return
      */
-    SqlDataSourceModel changeVo(DynamicDatasource datasourceDto);
+    @SneakyThrows
+    SqlDynamicDataSourceVO create(SqlDynamicDataSourceVO dynamicDataSourceVO);
 
     /**
-     * Delete Data source
+     * Delete SqlDynamicDataSourceVO
      * @param id
      */
     void delete(String id);
 
     /**
-     * Check data source is exist
+     * Check SqlDynamicDataSourceVO is exist by id
      * @param id
      * @return
      */
     boolean isExist(String id);
 
     /**
-     * Get sql data source
+     * Get SqlDynamicDataSourceVO
      * @param id
      * @return
      */
-    SqlDataSourceModel get(String id);
+    Optional<SqlDynamicDataSourceVO> get(String id);
+
+    @Data
+    @ToString
+    @Builder
+    @NoArgsConstructor
+    class SqlDynamicDataSourceVO implements Serializable {
+
+        private String id, dbUrl, dbUsername, dbPassword, driverClassName, dbType;
+
+        @JsonIgnore
+        private DruidDataSource dataSource;
+
+        @Override
+        public boolean equals(Object o) {
+            Predicate<SqlDynamicDataSourceVO> predicate = (vo) -> vo.getDbType().equalsIgnoreCase(this.dbType);
+            predicate.and((vo) -> vo.getDbUrl().equalsIgnoreCase(this.getDbUrl()));
+            predicate.and((vo) -> vo.getDbUsername().equalsIgnoreCase(this.dbUsername));
+            if (o instanceof SqlDynamicDataSourceVO){
+                return predicate.test((SqlDynamicDataSourceVO)o);
+            }
+            return false;
+        }
+
+    }
 
 }
