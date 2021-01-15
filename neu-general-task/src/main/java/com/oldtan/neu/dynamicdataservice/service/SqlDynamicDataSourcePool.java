@@ -2,7 +2,11 @@ package com.oldtan.neu.dynamicdataservice.service;
 
 import com.alibaba.druid.pool.DruidDataSource;
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import lombok.*;
+import com.oldtan.neu.model.entity.DynamicDatasource;
+import lombok.Builder;
+import lombok.Data;
+import lombok.SneakyThrows;
+import lombok.ToString;
 
 import java.io.Serializable;
 import java.util.Optional;
@@ -14,6 +18,13 @@ import java.util.function.Predicate;
  * @Date: 20-12-11
  */
 public interface SqlDynamicDataSourcePool {
+
+    /**
+     * Build SqlDynamicDataSourceVO by DynamicDatasource
+     * @param dynamicDatasource
+     * @return
+     */
+    SqlDynamicDataSourceVO buildSqlDynamicDataSourceVO(DynamicDatasource dynamicDatasource);
 
     /**
      * Create sql Data source
@@ -46,10 +57,9 @@ public interface SqlDynamicDataSourcePool {
     @Data
     @ToString
     @Builder
-    @NoArgsConstructor
     class SqlDynamicDataSourceVO implements Serializable {
 
-        private String id, dbUrl, dbUsername, dbPassword, driverClassName, dbType;
+        private String id, dbUrl, dbUsername, dbPassword, driverClassName, dbType, dbName;
 
         @JsonIgnore
         private DruidDataSource dataSource;

@@ -1,69 +1,98 @@
 package com.oldtan.neu.dynamicdataservice.service;
 
+import cn.hutool.db.Entity;
+import cn.hutool.db.Page;
+import cn.hutool.db.PageResult;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.oldtan.neu.dynamicdataservice.model.SqlDataDefinitionModel;
+import com.oldtan.neu.model.entity.DynamicDataDefinition;
+
+import java.util.List;
+import java.util.Optional;
 
 /**
- * @Description: TODO
+ * @Description: Sql execute interface
  * @Author: tanchuyue
  * @Date: 20-12-16
  */
 public interface SqlExecute {
 
     /**
-     * Query data definition object record count.
-     * @param model
+     * Query dynamic data definition object record count.
+     * @param dataDefinition
      * @return
      */
-    long getCount(SqlDataDefinitionModel model);
+    long getCount(DynamicDataDefinition dataDefinition);
 
     /**
-     * Query data definition object column definition json.
-     * @param model
+     * Query dynamic data source object all table definition.
+     * @param datasource
      * @return
      */
-    Object getColumnDefinition(SqlDataDefinitionModel model);
+    Optional<List<Entity>> getAllTable(SqlDynamicDataSourcePool.SqlDynamicDataSourceVO datasource);
 
     /**
-     * Insert data definition object one record by json.
-     * @param model
+     * Query single dynamic data definition table definition.
+     * @param datasource
+     * @param tableName
+     * @return
+     */
+    Optional<List<Entity>> getSingleTableDef(SqlDynamicDataSourcePool.SqlDynamicDataSourceVO datasource, String tableName);
+
+    /**
+     * Insert dynamic data definition object one record by json.
+     * @param dataDefinition
      * @param dataJson
      * @return
      */
-    void insertData(SqlDataDefinitionModel model, JsonNode dataJson);
+    void insertData(DynamicDataDefinition dataDefinition, JsonNode dataJson);
 
     /**
-     * Query data definition object one record by id.
-     * @param model
+     * Query dynamic data definition object one record by id.
+     * @param dataDefinition
      * @param id
      * @return
      */
-    Object getOneRecord(SqlDataDefinitionModel model, String id);
+    Optional<Entity> getOneRecord(DynamicDataDefinition dataDefinition, String id);
 
     /**
-     * Delete data definition object one record by id.
-     * @param model
+     * Delete dynamic data definition object one record by id.
+     * @param dataDefinition
      * @param id
      * @return
      */
-    void deleteOneRecord(SqlDataDefinitionModel model, String id);
+    void deleteOneRecord(DynamicDataDefinition dataDefinition, String id);
 
     /**
-     * Update data definition object one record by json.
-     * @param model
+     * Update dynamic data definition object one record by json.
+     * @param dataDefinition
      * @param id
      * @param dataJson
      * @return
      */
-    int updateOneRecord(SqlDataDefinitionModel model, String id, JsonNode dataJson);
+    int updateOneRecord(DynamicDataDefinition dataDefinition, String id, JsonNode dataJson);
 
     /**
      * Page Query data definition object.
-     * @param model
-     * @param pageNumber
-     * @param pageSize
+     * @param dataDefinition
+     * @param dataJson
+     * @param page
      * @return
      */
-    Object findAll(SqlDataDefinitionModel model, int pageNumber, int pageSize);
+    PageResult pageFind(DynamicDataDefinition dataDefinition, JsonNode dataJson, Page page);
 
+    /**
+     * Batch update data
+     * @param dataDefinition
+     * @param dataJson
+     * @return
+     */
+    int updateBatch(DynamicDataDefinition dataDefinition, JsonNode dataJson);
+
+    /**
+     * Batch insert data
+     * @param dataDefinition
+     * @param dataJsonList
+     * @return
+     */
+    int insertBatch(DynamicDataDefinition dataDefinition, List<JsonNode> dataJsonList);
 }

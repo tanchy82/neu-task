@@ -1,7 +1,10 @@
 package com.oldtan.neu.dynamicdataservice.service.impl;
 
+import cn.hutool.core.util.ArrayUtil;
 import com.alibaba.druid.pool.DruidDataSource;
+import com.oldtan.neu.dynamicdataservice.constant.Constant;
 import com.oldtan.neu.dynamicdataservice.service.SqlDynamicDataSourcePool;
+import com.oldtan.neu.model.entity.DynamicDatasource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.util.Assert;
@@ -27,6 +30,20 @@ public class SqlDynamicDataSourcePoolImpl implements SqlDynamicDataSourcePool {
     private final BlockingQueue<SqlDynamicDataSourceVO> dataSourceQueue = new ArrayBlockingQueue(10);
 
     private ReentrantLock lock = new ReentrantLock();
+
+    @Override
+    public SqlDynamicDataSourceVO buildSqlDynamicDataSourceVO(final DynamicDatasource dynamicDatasource) {
+        Supplier<String> dbnameSupplier = () -> {
+            String s = dynamicDatasource.getDbUrl();
+            int end = ArrayUtil.indexOf(s.toCharArray(), '?');
+            int start = ArrayUtil.lastIndexOf(s.split("\\?")[0].toCharArray(), '/') + 1;
+            return s.substring(start + 1, end); };
+        return SqlDynamicDataSourcePool.SqlDynamicDataSourceVO.builder()
+                .id(dynamicDatasource.getId()).dbName(dbnameSupplier.get())
+                .dbType(dynamicDatasource.getDbType()).dbUrl(dynamicDatasource.getDbUrl())
+                .dbUsername(dynamicDatasource.getDbUsername()).dbPassword(dynamicDatasource.getDbPassword())
+                .driverClassName(Constant.SQL_DATABASE_DRIVER_CLASS.get(dynamicDatasource.getDbType())).build();
+    }
 
     @Override
     public SqlDynamicDataSourceVO create(final SqlDynamicDataSourceVO dynamicDataSourceVO) {

@@ -53,12 +53,8 @@ public class DynamicDataSourceRest {
                     String.format("This argument is required, link information is exist.【 %s 】", datasourceDto.toString()));
         consumer.accept(datasourceDto);
         /** 2、create DynamicDatasource and store the pool */
-        String id = UUID.randomUUID().toString();
-        sqlDynamicDataSourcePool.create(SqlDynamicDataSourcePool.SqlDynamicDataSourceVO.builder()
-                .id(id)
-                .dbType(datasourceDto.getDbType()).dbUrl(datasourceDto.getDbUrl())
-                .dbUsername(datasourceDto.getDbUsername()).dbPassword(datasourceDto.getDbPassword())
-                .driverClassName(Constant.SQL_DATABASE_DRIVER_CLASS.get(datasourceDto.getDbType())).build());
+        datasourceDto.setId(UUID.randomUUID().toString());
+        sqlDynamicDataSourcePool.create(sqlDynamicDataSourcePool.buildSqlDynamicDataSourceVO(datasourceDto));
         /** 3、DynamicDatasource store the data base */
         lock.lock();
         try {
