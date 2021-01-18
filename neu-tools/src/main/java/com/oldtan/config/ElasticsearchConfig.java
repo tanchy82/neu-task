@@ -13,7 +13,7 @@ import java.net.InetAddress;
 import java.util.Arrays;
 
 /**
- * @Description: TODO 生产者
+ * @Description: elasticsearch config
  * @Author: tanchuyue
  * @Date: 21-1-18
  */
@@ -32,11 +32,8 @@ public class ElasticsearchConfig {
     @SneakyThrows
     public TransportClient getClient() {
         if (esClient == null){
-            Settings settings = Settings.builder()
-                    .put("cluster.name", clusterName) //如果集群的名字不是默认的elasticsearch，需指定
-                    .put("client.transport.sniff", true) //自动嗅探
-                    .build();
-            esClient =  new PreBuiltTransportClient(settings);
+            esClient =  new PreBuiltTransportClient(Settings.builder().put("cluster.name", clusterName)
+                    .put("client.transport.sniff", true).build());
             Arrays.stream(nodes.split(",")).forEach((s) -> {
                 try {
                     esClient.addTransportAddress(
@@ -49,21 +46,6 @@ public class ElasticsearchConfig {
             });
         }
         return esClient;
-
-
-            //可用连接设置参数说明
-            /*
-            cluster.name
-                指定集群的名字，如果集群的名字不是默认的elasticsearch，需指定。
-            client.transport.sniff
-                设置为true,将自动嗅探整个集群，自动加入集群的节点到连接列表中。
-            client.transport.ignore_cluster_name
-                Set to true to ignore cluster name validation of connected nodes. (since 0.19.4)
-            client.transport.ping_timeout
-                The time to wait for a ping response from a node. Defaults to 5s.
-            client.transport.nodes_sampler_interval
-                How often to sample / ping the nodes listed and connected. Defaults to 5s.
-            */
     }
 
 }
