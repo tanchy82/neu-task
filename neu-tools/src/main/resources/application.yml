@@ -1,0 +1,16 @@
+server:
+  port: 16666
+  undertow:
+    buffer-size: 2048
+    buffer-per-region: 1024
+    threads:
+      io: 4
+
+logging:
+  config: classpath:config/logback-neu.xml
+
+elasticsearch:
+  cluster:
+    name: escl01
+    nodes: 10.101.37.136:9300,10.101.37.137:9300
+
