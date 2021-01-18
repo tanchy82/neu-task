@@ -9,6 +9,12 @@ server:
 logging:
   config: classpath:config/logback-neu.xml
 
+springfox:
+  documentation:
+    swagger-ui:
+      enabled: true
+      base-url: /doc
+
 elasticsearch:
   cluster:
     name: escl01

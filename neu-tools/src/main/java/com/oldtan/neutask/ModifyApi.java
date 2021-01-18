@@ -1,5 +1,7 @@
 package com.oldtan.neutask;
 
+import io.swagger.annotations.ApiModel;
+import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.validation.annotation.Validated;
@@ -17,7 +19,7 @@ import java.util.Map;
  * @Date: 21-1-18
  */
 @RestController
-public class TestApi {
+public class ModifyApi {
 
     @Autowired
     private ModifyData modifyData;
@@ -35,12 +37,16 @@ public class TestApi {
     }
 
     @Data
+    @ApiModel("modify data model")
     static class Dto {
         @NotBlank
+        @ApiModelProperty("index")
         private String index;
         @NotBlank
+        @ApiModelProperty("index data property name field")
         private String name;
         @NotEmpty
+        @ApiModelProperty("index data property mapping field data")
         private Map<String, String> data;
     }
 
