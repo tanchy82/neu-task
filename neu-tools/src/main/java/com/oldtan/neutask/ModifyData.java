@@ -36,7 +36,11 @@ import java.util.stream.StreamSupport;
 @Component
 public class ModifyData {
 
-    private TransportClient esClient = ElasticsearchConfig.esClient;
+    private TransportClient esClient;
+
+    public ModifyData(ElasticsearchConfig config){
+        esClient = config.getClient();
+    }
 
     private ObjectMapper objectMapper = new ObjectMapper();
 
@@ -54,6 +58,7 @@ public class ModifyData {
         sourceBuilder.fetchSource("mapping","");
         searchRequest.source(sourceBuilder);
         try {
+            log.info(String.format("********Modify elasticsearch data by index %s , name %s ******", index, name));
             SearchResponse searchResponse = esClient.search(searchRequest).get();
             /** 1、Search index data */
             if (searchResponse.status() == RestStatus.OK){
@@ -64,20 +69,22 @@ public class ModifyData {
                    Map<String, Object> oldMap = hit.getSourceAsMap();
                    try {
                        JsonNode jsonNode = objectMapper.readTree(String.valueOf(oldMap.get("mapping")));
+                       log.info(String.format("Before %s", objectMapper.writeValueAsString(jsonNode)));
                        StreamSupport.stream(
                                 Spliterators.spliteratorUnknownSize(jsonNode.fieldNames(), Spliterator.ORDERED), false)
                                 .filter((s) -> newMapping.containsKey(s)).forEach((s) ->
-                               newMapping.get(s).keySet().stream().filter((s1) -> jsonNode.has(s1)).forEach((s1) -> {
-                                 if (s1.equalsIgnoreCase("index")){
+                               newMapping.get(s).keySet().stream()
+                                       .filter((s1) -> jsonNode.get(s).has(s1)
+                                               || newMapping.get(s).get(s1).toString().equalsIgnoreCase("false")).forEach((s1) -> {
+                                   if (s1.equalsIgnoreCase("index")){
                                      ((ObjectNode)jsonNode.get(s)).put(s1, Boolean.valueOf(newMapping.get(s).get(s1).toString()));
-                                 }else {
+                                   }else {
                                      ((ObjectNode)jsonNode.get(s)).put(s1, newMapping.get(s).get(s1).toString());
-                                 }
+                                   }
                                })
                        );
-                       System.out.println(objectMapper.writeValueAsString(jsonNode));
                        oldMap.put("mapping", objectMapper.writeValueAsString(jsonNode));
-
+                       log.info(String.format("After  %s", objectMapper.writeValueAsString(jsonNode)));
                        UpdateRequest updateRequest = new UpdateRequest();
                        updateRequest.timeout("30s");
                        updateRequest.index(hit.getIndex()).type(hit.getType()).id(hit.getId()).doc(oldMap);
