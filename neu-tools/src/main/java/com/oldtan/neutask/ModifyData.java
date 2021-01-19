@@ -40,7 +40,7 @@ public class ModifyData {
 
     private ObjectMapper objectMapper = new ObjectMapper();
 
-    public void modify(String index, String name, Map<String, String> newMapping){
+    public void modify(String index, String name, Map<String, Map<String, Object>> newMapping){
         SearchRequest searchRequest = new SearchRequest(index);
         searchRequest.types(index);
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
@@ -67,7 +67,13 @@ public class ModifyData {
                        StreamSupport.stream(
                                 Spliterators.spliteratorUnknownSize(jsonNode.fieldNames(), Spliterator.ORDERED), false)
                                 .filter((s) -> newMapping.containsKey(s)).forEach((s) ->
-                                ((ObjectNode)jsonNode.get(s)).put("type", newMapping.get(s))
+                               newMapping.get(s).keySet().stream().filter((s1) -> jsonNode.has(s1)).forEach((s1) -> {
+                                 if (s1.equalsIgnoreCase("index")){
+                                     ((ObjectNode)jsonNode.get(s)).put(s1, Boolean.valueOf(newMapping.get(s).get(s1).toString()));
+                                 }else {
+                                     ((ObjectNode)jsonNode.get(s)).put(s1, newMapping.get(s).get(s1).toString());
+                                 }
+                               })
                        );
                        System.out.println(objectMapper.writeValueAsString(jsonNode));
                        oldMap.put("mapping", objectMapper.writeValueAsString(jsonNode));

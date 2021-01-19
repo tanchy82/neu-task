@@ -25,7 +25,7 @@ public class ModifyApi {
     private ModifyData modifyData;
 
     @PostMapping("/modify")
-    public String test(@Validated @RequestBody Dto dto){
+    public String modify(@Validated @RequestBody Dto dto){
         /*ModifyData data = new ModifyData();
         Map<String, String> map = new HashMap<>();
         map.put("mapping","boolean");
@@ -47,7 +47,7 @@ public class ModifyApi {
         private String name;
         @NotEmpty
         @ApiModelProperty("index data property mapping field data")
-        private Map<String, String> data;
+        private Map<String, Map<String, Object>> data;
     }
 
 }
