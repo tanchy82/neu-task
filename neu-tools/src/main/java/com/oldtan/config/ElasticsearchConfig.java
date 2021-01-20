@@ -10,6 +10,7 @@ import org.springframework.context.annotation.Configuration;
 
 import java.net.InetAddress;
 import java.util.Arrays;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * @Description: elasticsearch config
@@ -25,23 +26,33 @@ public class ElasticsearchConfig {
     @Value("${elasticsearch.cluster.nodes}")
     private String nodes;
 
-    public static TransportClient esClient = null;
+    private static volatile TransportClient esClient = null;
+
+    private ReentrantLock lock = new  ReentrantLock();
 
     @SneakyThrows
     public TransportClient getClient() {
-        if (esClient == null){
-            esClient = new PreBuiltTransportClient(Settings.builder().put("cluster.name", clusterName)
-                    .put("client.transport.sniff", true).build());
-            Arrays.stream(nodes.split(",")).forEach((s) -> {
-                try {
-                    esClient.addTransportAddress(
-                            new InetSocketTransportAddress(InetAddress.getByName(s.split(":")[0]),
-                                    Integer.parseInt(s.split(":")[1])));
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
+        if (esClient == null) {
+            lock.lock();
+            try {
+                if (esClient == null) {
+                    esClient = new PreBuiltTransportClient(Settings.builder().put("cluster.name", clusterName)
+                            .put("client.transport.sniff", true).build());
+                    Arrays.stream(nodes.split(",")).forEach((s) -> {
+                        try {
+                            esClient.addTransportAddress(
+                                    new InetSocketTransportAddress(InetAddress.getByName(s.split(":")[0]),
+                                            Integer.parseInt(s.split(":")[1])));
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
 
-            });
+                    });
+                }
+            }finally {
+                lock.unlock();
+            }
+
         }
         return esClient;
     }
