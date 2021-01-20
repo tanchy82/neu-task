@@ -28,7 +28,10 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.*;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -60,15 +63,6 @@ public class ModifyApi {
         return "success";
     }
 
-    @PostMapping("/modify2")
-    public String modify2(){
-        Map<String, Set<String>> map = new HashMap<>();
-        map.put("test_dev_idx10", null);
-        map.put("ihbe_dataset_meta-lichen", null);
-        //modifyData2.modifyData2("suzhou_ihbe_dataset_meta-lichen", map);
-        return "success";
-    }
-
     @PostMapping("/upload")
     @ResponseBody
     @SneakyThrows
@@ -93,12 +87,9 @@ public class ModifyApi {
                 task = new HashMap<>(50);
             }
         }
-        System.out.println("===" + ReadExcel.tableQueue.size());
         ModifyData2.latch.await();
-        System.out.println("===" + ((ThreadPoolExecutor) executorService).getTaskCount());
         LocalDateTime finishTime = LocalDateTime.now();
         /** 4、Report */
-
         Object[] obj = ReadExcel.setMap.keySet().stream()
                 .filter((s) -> !ModifyData2.logBuffersMap.keySet().contains(s)).toArray();
         Supplier<StringBuffer> summaryReport = () -> {
@@ -127,13 +118,6 @@ public class ModifyApi {
         new Thread(() -> log.info(detailReport.apply(summary).toString()),"Modify data report thread").start();
         return summary.toString();
     }
-
-    @SneakyThrows
-    public static void main(String[] args){
-        int i = 606;
-        System.out.println(i / 50);
-    }
-
 
     static class ModifyThreadFactory implements ThreadFactory{
 

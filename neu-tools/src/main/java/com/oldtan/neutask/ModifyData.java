@@ -19,7 +19,6 @@ import org.elasticsearch.search.SearchHits;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.springframework.stereotype.Component;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Spliterator;
 import java.util.Spliterators;
@@ -99,24 +98,6 @@ public class ModifyData {
         } catch (InterruptedException e) {
             e.printStackTrace();
         } catch (ExecutionException e) {
-            e.printStackTrace();
-        }
-    }
-
-    public static void main(String[] args){
-        ObjectMapper objectMapper = new ObjectMapper();
-        Map<String, String> mm = new HashMap<>(1);
-        mm.put("mapping", "boolean");
-        String str = "{\"mapping\":{\"type\":\"text\"},\"enable\":{\"type\":\"boolean\"},\"name\":{\"type\":\"keyword\"},\"alias\":{\"type\":\"keyword\"}}";
-        try {
-            JsonNode jsonNode = objectMapper.readTree(str);
-            StreamSupport.stream(
-                    Spliterators.spliteratorUnknownSize(jsonNode.fieldNames(), Spliterator.ORDERED), false)
-                    .filter((s) -> mm.containsKey(s)).forEach((s) ->
-                ((ObjectNode)jsonNode.get(s)).put("type", mm.get(s))
-            );
-            System.out.println(objectMapper.writeValueAsString(jsonNode));
-        } catch (JsonProcessingException e) {
             e.printStackTrace();
         }
     }

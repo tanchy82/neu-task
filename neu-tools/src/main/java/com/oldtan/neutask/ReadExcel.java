@@ -4,8 +4,6 @@ import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
 import com.alibaba.excel.enums.CellExtraTypeEnum;
 import com.alibaba.excel.event.AnalysisEventListener;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Data;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -48,26 +46,19 @@ public class ReadExcel {
     @Slf4j
     public static class ExcelDataListener extends AnalysisEventListener<ExcelData>{
 
-        private ObjectMapper objectMapper = new ObjectMapper();
-
         private volatile String tableName = null;
 
         @Override
         @SneakyThrows
         public void invoke(ExcelData excelData, AnalysisContext analysisContext) {
-            try {
-                if (tableName == null && excelData.getTable() == null){
-                    throw new RuntimeException("table name and excel data value first col is not both null!!");
-                }else if(excelData.getTable() != null){
-                    tableName = excelData.getTable();
-                }else if(tableName != null){
-                    excelData.setTable(tableName);
-                }
-                log.info(objectMapper.writeValueAsString(excelData));
-                setMap.computeIfAbsent(excelData.getTable(), (s) -> new HashSet<String>()).add(excelData.getColumn());
-            } catch (JsonProcessingException e) {
-                e.printStackTrace();
+            if (tableName == null && excelData.getTable() == null){
+                throw new RuntimeException("table name and excel data value first col is not both null!!");
+            }else if(excelData.getTable() != null){
+                tableName = excelData.getTable();
+            }else if(tableName != null){
+                excelData.setTable(tableName);
             }
+            setMap.computeIfAbsent(excelData.getTable(), (s) -> new HashSet<String>()).add(excelData.getColumn());
         }
 
         @Override
