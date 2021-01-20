@@ -18,12 +18,11 @@ import org.elasticsearch.rest.RestStatus;
 import org.elasticsearch.search.SearchHits;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
 
-import java.util.Map;
-import java.util.Set;
-import java.util.Spliterator;
-import java.util.Spliterators;
-import java.util.concurrent.ExecutionException;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
 /**
@@ -35,6 +34,12 @@ import java.util.stream.StreamSupport;
 public class ModifyData2 implements Runnable{
 
     private TransportClient esClient;
+
+    public static volatile Map<String, StringBuffer> logBuffersMap = new ConcurrentHashMap<>();
+
+    public static volatile boolean isError = false;
+
+    public static volatile CountDownLatch latch;
 
     public ModifyData2(TransportClient esClient, String index, Map<String, Set<String>> map){
         this.esClient = esClient;
@@ -72,27 +77,36 @@ public class ModifyData2 implements Runnable{
                 hits.iterator().forEachRemaining((hit) -> {
                     Map<String, Object> hitMap = hit.getSourceAsMap();
                     String name = String.valueOf(hitMap.get("name"));
+                    final StringBuffer logBuffer = new StringBuffer();
                     JsonNode mappingJsonNode = strToJson(String.valueOf(hitMap.get("mapping")));
-                    log.info(String.format("********Modify elasticsearch data by index %s , name %s ******", index, name));
-                    log.info(String.format("Before %s", jsonToStr(mappingJsonNode)));
+                    logBuffer.append(String.format("********Modify elasticsearch data by index %s , name %s ****** \n", index, name));
+                    logBuffer.append(String.format("Before: %s \n", jsonToStr(mappingJsonNode)));
+                    logBuffer.append(String.format("Excel : %s \n", map.get(name)));
+                    Optional.ofNullable(map.get(name)).ifPresent((s) -> logBuffer.append("Difference: "));
                     StreamSupport.stream(Spliterators.spliteratorUnknownSize(mappingJsonNode.fieldNames(), Spliterator.ORDERED), false)
-                            .filter((s) -> CollectionUtil.isNotEmpty(map.get(name))
-                                    && !map.get(name).contains(s)).forEach((s) -> {
-                        ((ObjectNode)mappingJsonNode.get(s)).put("index", false);
+                                .filter((s) -> CollectionUtil.isNotEmpty(map.get(name)) && !map.get(name).contains(s)).forEach((s) -> {
+                            ((ObjectNode)mappingJsonNode.get(s)).put("index", false);
+                            logBuffer.append(String.format(" %s ", s));
+                            });
+                    Stream.of(jsonToStr(mappingJsonNode))
+                            .filter((s) -> !s.equalsIgnoreCase(String.valueOf(hitMap.get("mapping")))).forEach((s) -> {
                         UpdateRequest updateRequest = new UpdateRequest();
                         updateRequest.timeout(TimeValue.timeValueSeconds(30L));
-                        hitMap.put("mapping", jsonToStr(mappingJsonNode));
+                        hitMap.put("mapping", s);
                         updateRequest.index(hit.getIndex()).type(hit.getType()).id(hit.getId()).doc(hitMap);
-                        updateBulkRequest.add(updateRequest); });
-                    log.info(String.format("After %s", jsonToStr(mappingJsonNode)));
+                        updateBulkRequest.add(updateRequest);
+                    });
+                    logBuffer.append(String.format("\nAfter:  %s \n", jsonToStr(mappingJsonNode)));
+                    logBuffersMap.put(name, logBuffer);
                 });
                 /** 2、modify index data */
                 esClient.bulk(updateBulkRequest);
             }
-        } catch (InterruptedException e) {
+        } catch (Throwable e) {
+            isError = true;
             e.printStackTrace();
-        } catch (ExecutionException e) {
-            e.printStackTrace();
+        }finally {
+            latch.countDown();
         }
     }
 
