@@ -80,23 +80,29 @@ public class ModifyData2 implements Runnable{
                     final StringBuffer logBuffer = new StringBuffer();
                     JsonNode mappingJsonNode = strToJson(String.valueOf(hitMap.get("mapping")));
                     logBuffer.append(String.format("********Modify elasticsearch data by index %s , name %s ****** \n", index, name));
-                    logBuffer.append(String.format("Before: %s \n", jsonToStr(mappingJsonNode)));
+                    logBuffer.append(String.format("Before: %s \n", hitMap));
                     logBuffer.append(String.format("Excel : %s \n", map.get(name)));
                     Optional.ofNullable(map.get(name)).ifPresent((s) -> logBuffer.append("Difference: "));
+
+                    UpdateRequest updateRequest = new UpdateRequest();
+                    updateRequest.timeout(TimeValue.timeValueSeconds(30L));
+
+                    Optional.ofNullable(CollectionUtil.isEmpty(map.get(name))).ifPresent((f) -> hitMap.put("hbaseonly", f));
+
                     StreamSupport.stream(Spliterators.spliteratorUnknownSize(mappingJsonNode.fieldNames(), Spliterator.ORDERED), false)
-                                .filter((s) -> CollectionUtil.isNotEmpty(map.get(name)) && !map.get(name).contains(s)).forEach((s) -> {
-                            ((ObjectNode)mappingJsonNode.get(s)).put("index", false);
-                            logBuffer.append(String.format(" %s ", s));
-                            });
+                            .filter((s) -> CollectionUtil.isNotEmpty(map.get(name)))
+                            .filter((s) -> !map.get(name).contains(s))
+                            .forEach((s) -> {
+                                ((ObjectNode)mappingJsonNode.get(s)).put("index", false);
+                                logBuffer.append(String.format(" %s ", s)); });
+
                     Stream.of(jsonToStr(mappingJsonNode))
                             .filter((s) -> !s.equalsIgnoreCase(String.valueOf(hitMap.get("mapping")))).forEach((s) -> {
-                        UpdateRequest updateRequest = new UpdateRequest();
-                        updateRequest.timeout(TimeValue.timeValueSeconds(30L));
                         hitMap.put("mapping", s);
-                        updateRequest.index(hit.getIndex()).type(hit.getType()).id(hit.getId()).doc(hitMap);
-                        updateBulkRequest.add(updateRequest);
                     });
-                    logBuffer.append(String.format("\nAfter:  %s \n", jsonToStr(mappingJsonNode)));
+                    updateRequest.index(hit.getIndex()).type(hit.getType()).id(hit.getId()).doc(hitMap);
+                    updateBulkRequest.add(updateRequest);
+                    logBuffer.append(String.format("\nAfter:  %s \n", hitMap));
                     logBuffersMap.put(name, logBuffer);
                 });
                 /** 2、modify index data */

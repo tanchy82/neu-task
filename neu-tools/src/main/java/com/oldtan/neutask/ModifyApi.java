@@ -96,6 +96,7 @@ public class ModifyApi {
             StringBuffer report = new StringBuffer();
             report.append("\nTask execute report");
             report.append(String.format("\n---Result: %s", ModifyData2.isError ? "failure" : "success"));
+            report.append(String.format("\n---Task execute time: %s", startTime.toString()));
             report.append(String.format("\n---Total time consuming(Millis): %s", Duration.between(startTime,finishTime).toMillis()));
             report.append(String.format("\n---Analyze Excel time consuming(Millis): %s", Duration.between(startTime,excelFinishTime).toMillis()));
             report.append(String.format("\n---Concurrently execute query and modify elasticsearch data consuming(Millis): %s", Duration.between(excelFinishTime,finishTime).toMillis()));

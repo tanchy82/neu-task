@@ -8,10 +8,7 @@ import lombok.Data;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -37,9 +34,7 @@ public class ReadExcel {
     @Data
     public static class ExcelData{
 
-        private String table;
-
-        private String column;
+        private String table, column;
 
     }
 
@@ -58,14 +53,15 @@ public class ReadExcel {
             }else if(tableName != null){
                 excelData.setTable(tableName);
             }
-            setMap.computeIfAbsent(excelData.getTable(), (s) -> new HashSet<String>()).add(excelData.getColumn());
+            setMap.computeIfAbsent(excelData.getTable(), (s) -> new HashSet<>())
+                    .add(Objects.nonNull(excelData.getColumn()) ? excelData.getColumn() : null);
         }
 
         @Override
         public void doAfterAllAnalysed(AnalysisContext analysisContext) {
             setMap.keySet().stream().forEach((s) -> {
-                log.info(String.format("table name value is %s , %s", s, setMap.get(s)));
                 Map<String, Set<String>> table = new HashMap<>();
+                setMap.get(s).remove(null);
                 table.put(s, setMap.get(s));
                 tableQueue.offer(table);
             });
