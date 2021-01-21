@@ -51,7 +51,7 @@ public class ModifyApi {
 
     private TransportClient esClient;
 
-    ExecutorService executorService = Executors.newFixedThreadPool(16, new ModifyThreadFactory());
+    ExecutorService executorService = Executors.newFixedThreadPool(8, new ModifyThreadFactory());
 
     public ModifyApi(ElasticsearchConfig config){
         esClient = config.getClient();
@@ -70,7 +70,7 @@ public class ModifyApi {
         Assert.notNull(index, "This argument index is required, it must not be null");
         Assert.notNull(index, "This argument file is required, it must not be null");
         LocalDateTime startTime = LocalDateTime.now();
-        /** 1、Rest */
+        /** 1、Reset */
         ReadExcel.setMap.clear();
         ModifyData2.isError = false;
         ModifyData2.logBuffersMap.clear();
@@ -111,8 +111,8 @@ public class ModifyApi {
         Function<StringBuffer, StringBuffer> detailReport = (report) -> {
             report.append("\n---Execution details: \n");
             AtomicInteger i = new AtomicInteger(1);
-            ModifyData2.logBuffersMap.keySet().stream()
-                    .forEach((key) -> report.append("" + i.getAndIncrement() + ModifyData2.logBuffersMap.get(key)));
+            ModifyData2.logBuffersMap.keySet().stream().forEach(
+                    (key) -> report.append("" + i.getAndIncrement() + ModifyData2.logBuffersMap.get(key)));
             return report;
         };
         StringBuffer summary = summaryReport.get();

@@ -83,23 +83,17 @@ public class ModifyData2 implements Runnable{
                     logBuffer.append(String.format("Before: %s \n", hitMap));
                     logBuffer.append(String.format("Excel : %s \n", map.get(name)));
                     Optional.ofNullable(map.get(name)).ifPresent((s) -> logBuffer.append("Difference: "));
-
                     UpdateRequest updateRequest = new UpdateRequest();
                     updateRequest.timeout(TimeValue.timeValueSeconds(30L));
-
-                    Optional.ofNullable(CollectionUtil.isEmpty(map.get(name))).ifPresent((f) -> hitMap.put("hbaseonly", f));
-
+                    hitMap.put("hbaseonly", CollectionUtil.isEmpty(map.get(name)));
                     StreamSupport.stream(Spliterators.spliteratorUnknownSize(mappingJsonNode.fieldNames(), Spliterator.ORDERED), false)
                             .filter((s) -> CollectionUtil.isNotEmpty(map.get(name)))
                             .filter((s) -> !map.get(name).contains(s))
-                            .forEach((s) -> {
-                                ((ObjectNode)mappingJsonNode.get(s)).put("index", false);
+                            .forEach((s) -> { ((ObjectNode)mappingJsonNode.get(s)).put("index", false);
                                 logBuffer.append(String.format(" %s ", s)); });
-
                     Stream.of(jsonToStr(mappingJsonNode))
-                            .filter((s) -> !s.equalsIgnoreCase(String.valueOf(hitMap.get("mapping")))).forEach((s) -> {
-                        hitMap.put("mapping", s);
-                    });
+                            .filter((s) -> !s.equalsIgnoreCase(String.valueOf(hitMap.get("mapping"))))
+                            .forEach((s) -> hitMap.put("mapping", s));
                     updateRequest.index(hit.getIndex()).type(hit.getType()).id(hit.getId()).doc(hitMap);
                     updateBulkRequest.add(updateRequest);
                     logBuffer.append(String.format("\nAfter:  %s \n", hitMap));
