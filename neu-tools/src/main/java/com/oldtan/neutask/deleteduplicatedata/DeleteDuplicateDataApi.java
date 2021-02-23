@@ -1,0 +1,89 @@
+package com.oldtan.neutask.deleteduplicatedata;
+
+import com.oldtan.config.ElasticsearchConfig;
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiModel;
+import io.swagger.annotations.ApiModelProperty;
+import io.swagger.annotations.ApiParam;
+import lombok.Data;
+import lombok.SneakyThrows;
+import lombok.extern.slf4j.Slf4j;
+import org.elasticsearch.client.transport.TransportClient;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import javax.validation.constraints.NotBlank;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Stream;
+
+/**
+ * @Description: TODO
+ * @Author: tanchuyue
+ * @Date: 21-2-22
+ */
+@RestController
+@Api("Delete elasticsearch Duplicate data Restful API")
+@Slf4j
+public class DeleteDuplicateDataApi {
+
+    private TransportClient esClient;
+
+    private ExecutorService duplicateDataAggExecutorService =
+                Executors.newFixedThreadPool(4, new DuplicateDataThreadFactory("Agg-%s"));
+
+    private ExecutorService deleteDuplicateDataExecutorService =
+            Executors.newFixedThreadPool(8, new DuplicateDataThreadFactory("Delete-%s"));
+
+    public DeleteDuplicateDataApi(ElasticsearchConfig config){
+        esClient = config.getClient();
+    }
+
+    @PostMapping("/deleteDuplicate/{index}")
+    @SneakyThrows
+    public String modify(@PathVariable @NotBlank @ApiParam String index){
+        DuplicateDataAgg.ROWKEY_SET.clear();
+        DeleteDuplicateDataThreat.LOG_QUEUE.clear();
+        DuplicateDataAgg.latch = new CountDownLatch(4);
+        Stream.of(1,2,3,4).forEach((i) -> duplicateDataAggExecutorService.execute(new DuplicateDataAgg(esClient, index, deleteDuplicateDataExecutorService)));
+        DuplicateDataAgg.latch.await();
+        log.info(String.format("Count %s", DeleteDuplicateDataThreat.LOG_QUEUE.size()));
+        DuplicateDataAgg.ROWKEY_SET.clear();
+        return "ok";
+    }
+
+    @Data
+    @ApiModel("Delete elasticsearch Duplicate data Dto model")
+    static class Dto {
+        @NotBlank
+        @ApiModelProperty("index")
+        private String index;
+    }
+
+    static class DuplicateDataThreadFactory implements ThreadFactory {
+
+        private static final AtomicInteger threadNumber = new AtomicInteger(1);
+
+        private final String name;
+
+        public DuplicateDataThreadFactory(String name){
+            this.name = name;
+        }
+
+        @Override
+        public Thread newThread(Runnable r) {
+            Thread t = new Thread(Thread.currentThread().getThreadGroup(), r,
+                    String.format(name,threadNumber.getAndIncrement()), 0);
+            if (t.isDaemon())
+                t.setDaemon(false);
+            if (t.getPriority() != Thread.NORM_PRIORITY)
+                t.setPriority(Thread.NORM_PRIORITY);
+            return t;
+        }
+    }
+
+}
