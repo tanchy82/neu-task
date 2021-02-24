@@ -60,7 +60,8 @@ public class DuplicateDataAgg implements Runnable {
                         .map((hit) -> String.valueOf(hit.getSourceAsMap().get(DuplicateDataAgg.rowkeyFiled)))
                         .filter(((s) -> !RowkeySet.contains(s)))
                         .collect(Collectors.toSet())).filter((set) -> !set.isEmpty())
-                        .forEach((set) -> executorTask.execute(new DeleteDuplicateDataThreat(esClient, index, set)));
+                        .forEach((set) -> { RowkeySet.addAll(set);
+                                executorTask.execute(new DeleteDuplicateDataThreat(esClient, index, set));});
                 scrollResp = esClient.prepareSearchScroll(scrollResp.getScrollId()).setScroll(new TimeValue(60000)).execute().actionGet();
             } while(scrollResp.getHits().getHits().length != 0);
 

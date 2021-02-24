@@ -70,10 +70,10 @@ public class DeleteDuplicateDataApi {
             report.append("\nTask execute report");
             report.append(String.format("\n---Deal with rowkey records: %s", DuplicateDataAgg.RowkeySet.size()));
             report.append(String.format("\n---Delete data records: %s",
-                    DeleteDuplicateDataThreat.deleteCountHashMap.values().stream().mapToInt((m) -> m.size()).sum()));
-            report.append(String.format("\n---Task execute start time: %s", startTime.toString()));
-            report.append(String.format("\n---Task execute finish time: %s", finishTime.toString()));
-            report.append(String.format("\n---Total time consuming(Millisecond): %s", Duration.between(startTime, finishTime).toMillis()));
+                    DeleteDuplicateDataThreat.deleteCountHashMap.values().parallelStream().mapToInt((m) -> m.size()).sum()));
+            report.append(String.format("\n---Start time: %s", startTime.toString()));
+            report.append(String.format("\n---Finish time: %s", finishTime.toString()));
+            report.append(String.format("\n---Time consuming(Millisecond): %s", Duration.between(startTime, finishTime).toMillis()));
             return report;
         };
         return summaryReport.get().toString();

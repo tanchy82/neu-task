@@ -68,8 +68,7 @@ public class DeleteDuplicateDataThreat implements Runnable {
                               .date(Long.parseLong(String.valueOf(hit.getSourceAsMap().get("CREATE_DATE")))).build())
                   .filter((dvo) -> !deleteCountHashMap.containsKey(dvo.rowkey)).forEach(((dvo) ->
                    deleteVoMap.compute(dvo.rowkey, (k, v) -> {
-                       v = Objects.isNull(v) ? new ArrayList<>(20) : v ; v.add(dvo);
-                       return v; }))));
+                       v = Objects.isNull(v) ? new ArrayList<>(20) : v ; v.add(dvo); return v; }))));
 
             deleteVoMap.keySet().stream().forEach((s) -> {
                 deleteVoMap.put(s, deleteVoMap.get(s).stream()
