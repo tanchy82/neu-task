@@ -1,20 +1,17 @@
 package com.oldtan.neutask.deleteduplicatedata;
 
-import cn.hutool.core.collection.CollectionUtil;
 import lombok.extern.slf4j.Slf4j;
-import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.client.transport.TransportClient;
 import org.elasticsearch.common.unit.TimeValue;
-import org.elasticsearch.rest.RestStatus;
-import org.elasticsearch.search.aggregations.AggregationBuilders;
-import org.elasticsearch.search.aggregations.bucket.terms.StringTerms;
-import org.elasticsearch.search.builder.SearchSourceBuilder;
+import org.elasticsearch.index.query.QueryBuilders;
+import org.elasticsearch.search.Scroll;
 
-import java.util.HashSet;
 import java.util.Objects;
-import java.util.Set;
-import java.util.concurrent.*;
+import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -31,6 +28,8 @@ public class DuplicateDataAgg implements Runnable {
 
     private final String index;
 
+    private final String createDate;
+
     private final ExecutorService executorTask;
 
     public static volatile boolean isFinish = false;
@@ -39,46 +38,39 @@ public class DuplicateDataAgg implements Runnable {
 
     public static volatile CountDownLatch latch;
 
-    public DuplicateDataAgg(TransportClient esClient, String index, ExecutorService executorTask) {
+    public DuplicateDataAgg(TransportClient esClient, String index, int createDate, ExecutorService executorTask) {
         this.esClient = esClient;
         this.index = index;
         this.executorTask = executorTask;
+        this.createDate = createDate + "*";
     }
 
     @Override
     public void run() {
-        SearchRequest searchRequest = new SearchRequest(index);
-        searchRequest.types(index);
         try {
-            while (!isFinish) {
-                searchRequest.source(new SearchSourceBuilder()
-                        .aggregation(AggregationBuilders.terms("groupAgg").field(rowkeyFiled + ".keyword").minDocCount(2).size(5000_0000).executionHint("map"))
-                        .size(0).timeout(new TimeValue(600, TimeUnit.SECONDS)));
-                Set<String> rowkeySet = new HashSet<>(1000);
-                SearchResponse searchResponse = esClient.search(searchRequest).get();
+            SearchResponse scrollResp = esClient.prepareSearch(index)
+                    .setScroll(new Scroll(TimeValue.timeValueMinutes(60L)))
+                    .setQuery(QueryBuilders.boolQuery().filter(QueryBuilders.wildcardQuery("CREATE_DATE", createDate)))
+                    .setFetchSource(true).setFetchSource(new String[]{DuplicateDataAgg.rowkeyFiled}, new String[]{})
+                    .setSize(100).get();
+            do {
+                Stream.of(Stream.of(scrollResp.getHits().getHits())
+                        .filter((hit) -> Objects.nonNull(hit.getSourceAsMap()))
+                        .filter((hit) -> Objects.nonNull(hit.getSourceAsMap().get(DuplicateDataAgg.rowkeyFiled)))
+                        .map((hit) -> String.valueOf(hit.getSourceAsMap().get(DuplicateDataAgg.rowkeyFiled)))
+                        .filter(((s) -> !RowkeySet.contains(s)))
+                        .collect(Collectors.toSet())).filter((set) -> !set.isEmpty())
+                        .forEach((set) -> executorTask.execute(new DeleteDuplicateDataThreat(esClient, index, set)));
+                scrollResp = esClient.prepareSearchScroll(scrollResp.getScrollId()).setScroll(new TimeValue(60000)).execute().actionGet();
+            } while(scrollResp.getHits().getHits().length != 0);
 
-                Stream.of(searchResponse).filter(Objects::nonNull)
-                        .filter((r) -> Objects.equals(r.status(), RestStatus.OK)).forEach(r -> {
-                    StringTerms terms = (StringTerms) r.getAggregations().getAsMap().get("groupAgg");
-                    if (terms.getBuckets().isEmpty())
-                        isFinish = true; else
-                    terms.getBuckets().stream().filter((bucket) -> !RowkeySet.contains(bucket.getKeyAsString()))
-                            .forEach((bucket) -> {
-                                RowkeySet.add(bucket.getKeyAsString());
-                                rowkeySet.add(bucket.getKeyAsString());
-                            });
-                });
-                Stream.of(rowkeySet).filter(CollectionUtil::isNotEmpty).forEach((set) ->
-                        executorTask.execute(new DeleteDuplicateDataThreat(esClient, index, rowkeySet)));
-            }
             while (DeleteDuplicateDataThreat.taskCount.get() != 0L) {
 
             }
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
             latch.countDown();
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        } catch (ExecutionException e) {
-            e.printStackTrace();
         }
     }
 }

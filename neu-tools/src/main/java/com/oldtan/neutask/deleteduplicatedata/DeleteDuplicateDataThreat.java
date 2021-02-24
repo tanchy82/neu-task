@@ -56,7 +56,7 @@ public class DeleteDuplicateDataThreat implements Runnable {
             searchRequest.source(new SearchSourceBuilder()
                     .query(QueryBuilders.boolQuery().filter(QueryBuilders.termsQuery(DuplicateDataAgg.rowkeyFiled, rowkeySet.toArray())))
                     .fetchSource(true).fetchSource(new String[]{DuplicateDataAgg.rowkeyFiled, "CREATE_DATE"}, new String[]{})
-                    .size(2000).timeout(new TimeValue(60, TimeUnit.SECONDS)));
+                    .size(10000).timeout(new TimeValue(60, TimeUnit.SECONDS)));
             final Map<String, List<DeleteVo>> deleteVoMap = new HashMap<>();
             SearchResponse searchResponse = esClient.search(searchRequest).get();
             Stream.of(searchResponse).filter(Objects::nonNull)

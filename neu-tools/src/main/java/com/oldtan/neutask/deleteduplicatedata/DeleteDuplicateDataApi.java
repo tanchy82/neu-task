@@ -9,11 +9,15 @@ import lombok.Data;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.elasticsearch.client.transport.TransportClient;
-import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
+import javax.validation.constraints.Max;
+import javax.validation.constraints.Min;
 import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.NotNull;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.concurrent.CountDownLatch;
@@ -22,7 +26,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
-import java.util.stream.Stream;
 
 /**
  * @Description: TODO
@@ -46,15 +49,19 @@ public class DeleteDuplicateDataApi {
         esClient = config.getClient();
     }
 
-    @PostMapping("/deleteDuplicate/{index}")
+    @PostMapping("/deleteDuplicate")
     @SneakyThrows
-    public String modify(@PathVariable @NotBlank @ApiParam String index) {
+    public String deleteDuplicate(@Validated @RequestBody @ApiParam Dto dto) {
         LocalDateTime startTime = LocalDateTime.now();
         DeleteDuplicateDataThreat.deleteCountHashMap.clear();
         DuplicateDataAgg.RowkeySet.clear();
         DuplicateDataAgg.isFinish = false;
-        DuplicateDataAgg.latch = new CountDownLatch(4);
-        Stream.of(1,2,3,4).forEach((i) -> duplicateDataAggExecutorService.execute(new DuplicateDataAgg(esClient, index, findDuplicateDataExecutorService)));
+        DuplicateDataAgg.latch = new CountDownLatch(dto.end - dto.start + 1);
+        do {
+            duplicateDataAggExecutorService.execute(
+                    new DuplicateDataAgg(esClient, dto.index, dto.start, findDuplicateDataExecutorService));
+            dto.start = dto.start + 1;
+        }while (dto.start <= dto.end);
         DuplicateDataAgg.latch.await();
         LocalDateTime finishTime = LocalDateTime.now();
 
@@ -75,9 +82,19 @@ public class DeleteDuplicateDataApi {
     @Data
     @ApiModel("Delete elasticsearch Duplicate data Dto model")
     static class Dto {
+
         @NotBlank
         @ApiModelProperty("index")
         private String index;
+
+        @NotNull
+        @Min(20200101)
+        @Max(20211231)
+        private Integer start;
+
+        @Min(20200101)
+        @Max(20211231)
+        private Integer end;
     }
 
     static class DuplicateDataThreadFactory implements ThreadFactory {
