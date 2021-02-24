@@ -33,6 +33,8 @@ public class DuplicateDataAgg implements Runnable {
 
     private final ExecutorService executorTask;
 
+    private static volatile boolean isFinish = false;
+
     public static volatile ConcurrentSkipListSet<String> RowkeySet = new ConcurrentSkipListSet();
 
     public static volatile CountDownLatch latch;
@@ -48,26 +50,27 @@ public class DuplicateDataAgg implements Runnable {
         SearchRequest searchRequest = new SearchRequest(index);
         searchRequest.types(index);
         try {
-            while (true) {
+            while (!isFinish) {
                 searchRequest.source(new SearchSourceBuilder()
-                        .aggregation(AggregationBuilders.terms("groupAgg").field(rowkeyFiled+".keyword").minDocCount(2).size(100).executionHint("map"))
-                        .size(0).timeout(new TimeValue(60, TimeUnit.SECONDS)));
+                        .aggregation(AggregationBuilders.terms("groupAgg").field(rowkeyFiled + ".keyword").minDocCount(2).size(100).executionHint("map"))
+                        .size(0).timeout(new TimeValue(600, TimeUnit.SECONDS)));
                 Set<String> rowkeySet = new HashSet<>(100);
                 SearchResponse searchResponse = esClient.search(searchRequest).get();
+
                 Stream.of(searchResponse).filter(Objects::nonNull)
                         .filter((r) -> Objects.equals(r.status(), RestStatus.OK)).forEach(r -> {
                     StringTerms terms = (StringTerms) r.getAggregations().getAsMap().get("groupAgg");
+                    if (terms.getBuckets().isEmpty()) isFinish = true; else
                     terms.getBuckets().stream().filter((bucket) -> !RowkeySet.contains(bucket.getKeyAsString()))
                             .forEach((bucket) -> {
                                 RowkeySet.add(bucket.getKeyAsString());
-                                rowkeySet.add(bucket.getKeyAsString());});
+                                rowkeySet.add(bucket.getKeyAsString());
+                            });
                 });
-                if (rowkeySet.isEmpty()) break;
-                Stream.of(rowkeySet).filter(CollectionUtil::isNotEmpty).forEach((set) -> {
-
-                    executorTask.execute(new FindDuplicateDataThreat(esClient, index, rowkeySet));});
+                Stream.of(rowkeySet).filter(CollectionUtil::isNotEmpty).forEach((set) ->
+                        executorTask.execute(new DeleteDuplicateDataThreat(esClient, index, rowkeySet)));
             }
-            while (FindDuplicateDataThreat.taskCount.get() != 0L){
+            while (DeleteDuplicateDataThreat.taskCount.get() != 0L) {
 
             }
             latch.countDown();

@@ -29,7 +29,7 @@ import java.util.stream.StreamSupport;
  * @Date: 21-2-23
  */
 @Slf4j
-public class FindDuplicateDataThreat implements Runnable {
+public class DeleteDuplicateDataThreat implements Runnable {
 
     private final TransportClient esClient;
 
@@ -41,7 +41,7 @@ public class FindDuplicateDataThreat implements Runnable {
 
     public static volatile ConcurrentHashMap<String, List<DeleteVo>> deleteCountHashMap = new ConcurrentHashMap<>();
 
-    public FindDuplicateDataThreat(TransportClient esClient, String index, Set<String> rowkeySet) {
+    public DeleteDuplicateDataThreat(TransportClient esClient, String index, Set<String> rowkeySet) {
         this.esClient = esClient;
         this.index = index;
         this.rowkeySet = rowkeySet;
