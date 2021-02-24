@@ -33,7 +33,7 @@ public class DuplicateDataAgg implements Runnable {
 
     private final ExecutorService executorTask;
 
-    private static volatile boolean isFinish = false;
+    public static volatile boolean isFinish = false;
 
     public static volatile ConcurrentSkipListSet<String> RowkeySet = new ConcurrentSkipListSet();
 
@@ -52,15 +52,16 @@ public class DuplicateDataAgg implements Runnable {
         try {
             while (!isFinish) {
                 searchRequest.source(new SearchSourceBuilder()
-                        .aggregation(AggregationBuilders.terms("groupAgg").field(rowkeyFiled + ".keyword").minDocCount(2).size(100).executionHint("map"))
+                        .aggregation(AggregationBuilders.terms("groupAgg").field(rowkeyFiled + ".keyword").minDocCount(2).size(5000_0000).executionHint("map"))
                         .size(0).timeout(new TimeValue(600, TimeUnit.SECONDS)));
-                Set<String> rowkeySet = new HashSet<>(100);
+                Set<String> rowkeySet = new HashSet<>(1000);
                 SearchResponse searchResponse = esClient.search(searchRequest).get();
 
                 Stream.of(searchResponse).filter(Objects::nonNull)
                         .filter((r) -> Objects.equals(r.status(), RestStatus.OK)).forEach(r -> {
                     StringTerms terms = (StringTerms) r.getAggregations().getAsMap().get("groupAgg");
-                    if (terms.getBuckets().isEmpty()) isFinish = true; else
+                    if (terms.getBuckets().isEmpty())
+                        isFinish = true; else
                     terms.getBuckets().stream().filter((bucket) -> !RowkeySet.contains(bucket.getKeyAsString()))
                             .forEach((bucket) -> {
                                 RowkeySet.add(bucket.getKeyAsString());

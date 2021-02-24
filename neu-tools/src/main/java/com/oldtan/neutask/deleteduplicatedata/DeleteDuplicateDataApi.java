@@ -50,9 +50,10 @@ public class DeleteDuplicateDataApi {
     @SneakyThrows
     public String modify(@PathVariable @NotBlank @ApiParam String index) {
         LocalDateTime startTime = LocalDateTime.now();
-        DuplicateDataAgg.RowkeySet.clear();
         DeleteDuplicateDataThreat.deleteCountHashMap.clear();
-        DuplicateDataAgg.latch = new CountDownLatch(1);
+        DuplicateDataAgg.RowkeySet.clear();
+        DuplicateDataAgg.isFinish = false;
+        DuplicateDataAgg.latch = new CountDownLatch(4);
         Stream.of(1,2,3,4).forEach((i) -> duplicateDataAggExecutorService.execute(new DuplicateDataAgg(esClient, index, findDuplicateDataExecutorService)));
         DuplicateDataAgg.latch.await();
         LocalDateTime finishTime = LocalDateTime.now();
