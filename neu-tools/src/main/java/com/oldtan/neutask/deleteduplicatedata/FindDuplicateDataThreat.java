@@ -15,11 +15,13 @@ import org.elasticsearch.rest.RestStatus;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 /**
  * @Description: TODO
@@ -27,7 +29,7 @@ import java.util.stream.Stream;
  * @Date: 21-2-23
  */
 @Slf4j
-public class DeleteDuplicateDataThreat implements Runnable {
+public class FindDuplicateDataThreat implements Runnable {
 
     private final TransportClient esClient;
 
@@ -35,12 +37,15 @@ public class DeleteDuplicateDataThreat implements Runnable {
 
     private final Set<String> rowkeySet;
 
-    public static volatile ConcurrentLinkedQueue<DeleteVo> LOG_QUEUE = new ConcurrentLinkedQueue();
+    public static volatile AtomicLong taskCount = new AtomicLong(0L);
 
-    public DeleteDuplicateDataThreat(TransportClient esClient, String index, Set<String> rowkeySet) {
+    public static volatile ConcurrentHashMap<String, List<DeleteVo>> deleteCountHashMap = new ConcurrentHashMap<>();
+
+    public FindDuplicateDataThreat(TransportClient esClient, String index, Set<String> rowkeySet) {
         this.esClient = esClient;
         this.index = index;
         this.rowkeySet = rowkeySet;
+        taskCount.getAndIncrement();
     }
 
     @Override
@@ -51,49 +56,38 @@ public class DeleteDuplicateDataThreat implements Runnable {
             searchRequest.source(new SearchSourceBuilder()
                     .query(QueryBuilders.boolQuery().filter(QueryBuilders.termsQuery(DuplicateDataAgg.rowkeyFiled, rowkeySet.toArray())))
                     .fetchSource(true).fetchSource(new String[]{DuplicateDataAgg.rowkeyFiled, "CREATE_DATE"}, new String[]{})
-                    .size(20).timeout(new TimeValue(60, TimeUnit.SECONDS)));
+                    .size(2000).timeout(new TimeValue(60, TimeUnit.SECONDS)));
             final Map<String, List<DeleteVo>> deleteVoMap = new HashMap<>();
             SearchResponse searchResponse = esClient.search(searchRequest).get();
             Stream.of(searchResponse).filter(Objects::nonNull)
                     .filter((r) -> Objects.equals(r.status(), RestStatus.OK)).forEach(r ->
-                    r.getHits().iterator().forEachRemaining((hit) -> {
-                        Map<String, Object> hitMap = hit.getSourceAsMap();
-                        DeleteVo deleteVo = DeleteVo.builder().id(hit.getId())
-                                .rowkey(String.valueOf(hitMap.get(DuplicateDataAgg.rowkeyFiled)))
-                                .date(Long.parseLong(String.valueOf(hitMap.get("CREATE_DATE")))).build();
-                        if (deleteVoMap.containsKey(deleteVo.rowkey)) {
-                            deleteVoMap.get(deleteVo.rowkey).add(deleteVo);
-                        } else {
-                            List<DeleteVo> temp = new ArrayList<>();
-                            temp.add(deleteVo);
-                            deleteVoMap.put(deleteVo.rowkey, temp);
-                        }
-                    })
-            );
-            deleteVoMap.keySet().stream().forEach((s) -> deleteVoMap.put(s, deleteVoMap.get(s).stream()
-                    .sorted(Comparator.comparing(DeleteVo::getDate).reversed()).collect(Collectors.toList()))
-            );
+               StreamSupport.stream(
+                       Spliterators.spliteratorUnknownSize(r.getHits().iterator(), Spliterator.ORDERED), false)
+                  .map(hit -> DeleteVo.builder().id(hit.getId())
+                              .rowkey(String.valueOf(hit.getSourceAsMap().get(DuplicateDataAgg.rowkeyFiled)))
+                              .date(Long.parseLong(String.valueOf(hit.getSourceAsMap().get("CREATE_DATE")))).build())
+                  .filter((dvo) -> !deleteCountHashMap.containsKey(dvo.rowkey)).forEach(((dvo) ->
+                   deleteVoMap.compute(dvo.rowkey, (k, v) -> {
+                       v = Objects.isNull(v) ? new ArrayList<>(20) : v ; v.add(dvo);
+                       return v; }))));
 
+            deleteVoMap.keySet().stream().forEach((s) -> {
+                deleteVoMap.put(s, deleteVoMap.get(s).stream()
+                        .sorted(Comparator.comparing(DeleteVo::getDate).reversed()).skip(1).collect(Collectors.toList()));
+                deleteCountHashMap.put(s, deleteVoMap.get(s));
+            });
             BulkRequest bulkRequest = new BulkRequest();
             bulkRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-
-            deleteVoMap.keySet().stream()
-                    .flatMap((s) -> deleteVoMap.get(s).stream())
-                    .forEach((s) -> {
-                        bulkRequest.add(new DeleteRequest(index,index, s.id));
-                        LOG_QUEUE.offer(s);
-                        log.info(String.format("%s %s %s", s.id, s.rowkey, s.date));});
-            /** delete 从小到大排序 */
+            deleteVoMap.values().stream().forEach((list) -> list.stream()
+                    .forEach((vo) -> bulkRequest.add(new DeleteRequest(index, index, vo.id))));
             esClient.bulk(bulkRequest);
-            /** record log */
-            //rowkeySet.stream().forEach((s) -> DuplicateDataAgg.SKIP_LIST_SET.remove(s));
-
         } catch (InterruptedException e) {
             e.printStackTrace();
         } catch (ExecutionException e) {
             e.printStackTrace();
+        } finally {
+            taskCount.getAndDecrement();
         }
-
     }
 
     @Data

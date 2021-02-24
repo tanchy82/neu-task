@@ -14,11 +14,14 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.validation.constraints.NotBlank;
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 /**
@@ -34,26 +37,38 @@ public class DeleteDuplicateDataApi {
     private TransportClient esClient;
 
     private ExecutorService duplicateDataAggExecutorService =
-                Executors.newFixedThreadPool(4, new DuplicateDataThreadFactory("Agg-%s"));
+            Executors.newFixedThreadPool(4, new DuplicateDataThreadFactory("Agg-%s"));
 
-    private ExecutorService deleteDuplicateDataExecutorService =
-            Executors.newFixedThreadPool(8, new DuplicateDataThreadFactory("Delete-%s"));
+    private ExecutorService findDuplicateDataExecutorService =
+            Executors.newFixedThreadPool(8, new DuplicateDataThreadFactory("Find-%s"));
 
-    public DeleteDuplicateDataApi(ElasticsearchConfig config){
+    public DeleteDuplicateDataApi(ElasticsearchConfig config) {
         esClient = config.getClient();
     }
 
     @PostMapping("/deleteDuplicate/{index}")
     @SneakyThrows
-    public String modify(@PathVariable @NotBlank @ApiParam String index){
-        DuplicateDataAgg.ROWKEY_SET.clear();
-        DeleteDuplicateDataThreat.LOG_QUEUE.clear();
-        DuplicateDataAgg.latch = new CountDownLatch(4);
-        Stream.of(1,2,3,4).forEach((i) -> duplicateDataAggExecutorService.execute(new DuplicateDataAgg(esClient, index, deleteDuplicateDataExecutorService)));
+    public String modify(@PathVariable @NotBlank @ApiParam String index) {
+        LocalDateTime startTime = LocalDateTime.now();
+        DuplicateDataAgg.RowkeySet.clear();
+        FindDuplicateDataThreat.deleteCountHashMap.clear();
+        DuplicateDataAgg.latch = new CountDownLatch(1);
+        Stream.of(1,2,3,4).forEach((i) -> duplicateDataAggExecutorService.execute(new DuplicateDataAgg(esClient, index, findDuplicateDataExecutorService)));
         DuplicateDataAgg.latch.await();
-        log.info(String.format("Count %s", DeleteDuplicateDataThreat.LOG_QUEUE.size()));
-        DuplicateDataAgg.ROWKEY_SET.clear();
-        return "ok";
+        LocalDateTime finishTime = LocalDateTime.now();
+
+        Supplier<StringBuffer> summaryReport = () -> {
+            StringBuffer report = new StringBuffer();
+            report.append("\nTask execute report");
+            report.append(String.format("\n---Deal with rowkey records: %s", DuplicateDataAgg.RowkeySet.size()));
+            report.append(String.format("\n---Delete data records: %s",
+                    FindDuplicateDataThreat.deleteCountHashMap.values().stream().mapToInt((m) -> m.size()).sum()));
+            report.append(String.format("\n---Task execute start time: %s", startTime.toString()));
+            report.append(String.format("\n---Task execute finish time: %s", finishTime.toString()));
+            report.append(String.format("\n---Total time consuming(Millisecond): %s", Duration.between(startTime, finishTime).toMillis()));
+            return report;
+        };
+        return summaryReport.get().toString();
     }
 
     @Data
@@ -70,14 +85,14 @@ public class DeleteDuplicateDataApi {
 
         private final String name;
 
-        public DuplicateDataThreadFactory(String name){
+        public DuplicateDataThreadFactory(String name) {
             this.name = name;
         }
 
         @Override
         public Thread newThread(Runnable r) {
             Thread t = new Thread(Thread.currentThread().getThreadGroup(), r,
-                    String.format(name,threadNumber.getAndIncrement()), 0);
+                    String.format(name, threadNumber.getAndIncrement()), 0);
             if (t.isDaemon())
                 t.setDaemon(false);
             if (t.getPriority() != Thread.NORM_PRIORITY)
