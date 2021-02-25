@@ -111,7 +111,7 @@ public class DeleteDuplicateDataApi {
             while (!FindDuplicateData.delQueue.isEmpty()) {
                 Set<String> idSet = new HashSet<>(10000);
                 FindDuplicateData.delQueue.stream().limit(10000).forEach(
-                        s -> idSet.add(FindDuplicateData.delQueue.poll().split(" ~#~ ")[0]));
+                        s -> idSet.add(FindDuplicateData.delQueue.poll()));
                 deleteDuplicateDataExecutorService.execute(new DeleteDuplicateData(esClient, dto.index, idSet));
             }
             DeleteDuplicateData.latch.await();

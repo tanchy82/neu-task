@@ -74,14 +74,14 @@ public class FindDuplicateData implements Runnable {
                     .filter(bucket -> Optional.ofNullable(bucket.getAggregations().getAsMap().get("Top")).isPresent())
                     .map(bucket -> (TopHits) bucket.getAggregations().get("Top"))
                     .flatMap(topHits -> Arrays.stream(topHits.getHits().getHits()))
-                    /*.map(SearchHit::getId)
-                    .forEach(delQueue::offer);*/
-                    .filter(hit -> Optional.ofNullable(hit.getSourceAsMap()).isPresent())
+                    .map(SearchHit::getId)
+                    .forEach(delQueue::offer);
+                    /*.filter(hit -> Optional.ofNullable(hit.getSourceAsMap()).isPresent())
                     .filter(hit -> Optional.ofNullable(hit.getSourceAsMap().get("CREATE_DATE")).isPresent())
                     .filter(hit -> Optional.ofNullable(hit.getSourceAsMap().get(ScrollQuery.rowkeyFiled)).isPresent())
                     .map(hit -> String.format("%s ~#~ %s ~#~ %s", hit.getId(),
                             hit.getSourceAsMap().get(ScrollQuery.rowkeyFiled), hit.getSourceAsMap().get("CREATE_DATE")))
-                    .forEach(delQueue::offer);
+                    .forEach(delQueue::offer);*/
         } catch (Exception e) {
             e.printStackTrace();
         } finally {
