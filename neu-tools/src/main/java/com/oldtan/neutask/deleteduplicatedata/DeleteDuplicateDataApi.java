@@ -21,16 +21,12 @@ import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.HashSet;
-import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 /**
  * @Description: TODO
@@ -44,13 +40,10 @@ public class DeleteDuplicateDataApi {
 
     private TransportClient esClient;
 
-    private ExecutorService duplicateDataAggExecutorService =
+    private ExecutorService scrollExecutorService =
             Executors.newFixedThreadPool(8, new DuplicateDataThreadFactory("Scroll-%s"));
 
-    private ExecutorService findDuplicateDataExecutorService =
-            Executors.newFixedThreadPool(8, new DuplicateDataThreadFactory("Find-%s"));
-
-    private ExecutorService deleteDuplicateDataExecutorService =
+    private ExecutorService deleteExecutorService =
             Executors.newFixedThreadPool(8, new DuplicateDataThreadFactory("Delete-%s"));
 
     private volatile boolean noTaskExecuting = true;
@@ -59,81 +52,38 @@ public class DeleteDuplicateDataApi {
         esClient = config.getClient();
     }
 
-    @PostMapping("/test")
+    @PostMapping("/deleteDuplicateData")
     @SneakyThrows
-    public String test() {
-        FindDuplicateData.latch = new CountDownLatch(1);
-        Set<String> set = new HashSet<>();
-        set.add("1a");
-        set.add("2a");
-        new Thread(new FindDuplicateData(esClient, "tcy01", set)).start();
-        FindDuplicateData.latch.await();
-        FindDuplicateData.delQueue.stream().forEach(s -> log.info(s));
-        return "ok";
-    }
-
-    @PostMapping("/deleteDuplicate")
-    @SneakyThrows
-    public String deleteDuplicate(@Validated @RequestBody @ApiParam Dto dto) {
+    public String deleteDuplicateData(@Validated @RequestBody @ApiParam Dto dto) {
         Assert.isTrue(noTaskExecuting, "There is current task executing.");
         noTaskExecuting = false;
         /** 1、Rest */
         LocalDateTime startTime = LocalDateTime.now();
-        ScrollQuery.RowkeySet.clear();
-        FindDuplicateData.delQueue.clear();
+        DeleteService.delCount.set(0L);
+        ScrollService.RowkeySet.clear();
+        ScrollService.delRowKey.set(0L);
 
-        /** 2、Scroll query time range data */
-        ScrollQuery.latch = new CountDownLatch(dto.end - dto.start + 1);
-        IntStream.rangeClosed(dto.start, dto.end).forEach(
-                (i) -> duplicateDataAggExecutorService.execute(new ScrollQuery(esClient, dto.index, i)));
-        ScrollQuery.latch.await();
-        LocalDateTime scrollQueryTime = LocalDateTime.now();
-        long scrollQueryCount = ScrollQuery.RowkeySet.size();
-        log.info(String.format("Scroll query rowkey field record %s ", scrollQueryCount));
-
-        /** 3、Find duplicate data */
-        if (ScrollQuery.RowkeySet.size() > 0) {
-            FindDuplicateData.latch = new CountDownLatch(ScrollQuery.RowkeySet.size() / 1000 + 1);
-            while (!ScrollQuery.RowkeySet.isEmpty()) {
-                Set<String> temp = ScrollQuery.RowkeySet.stream().limit(1000).collect(Collectors.toSet());
-                findDuplicateDataExecutorService.execute(new FindDuplicateData(esClient, dto.index, temp));
-                ScrollQuery.RowkeySet.removeAll(temp);
-            }
-            FindDuplicateData.latch.await();
-        }
-        LocalDateTime findDuplicateTime = LocalDateTime.now();
-        long duplicateDataCount = FindDuplicateData.delQueue.size();
-        log.info(String.format("Find duplicate data record %s ", FindDuplicateData.delQueue.size()));
-
-        /** 4、Delete duplicate data */
-        if (duplicateDataCount > 0) {
-            DeleteDuplicateData.latch = new CountDownLatch(FindDuplicateData.delQueue.size() / 10000 + 1);
-            while (!FindDuplicateData.delQueue.isEmpty()) {
-                Set<String> idSet = new HashSet<>(10000);
-                FindDuplicateData.delQueue.stream().limit(10000).forEach(
-                        s -> idSet.add(FindDuplicateData.delQueue.poll()));
-                deleteDuplicateDataExecutorService.execute(new DeleteDuplicateData(esClient, dto.index, idSet));
-            }
-            DeleteDuplicateData.latch.await();
-        }
+        /** 2、Task */
+        ScrollService.latch = new CountDownLatch(1);
+        scrollExecutorService.execute(new ScrollService(esClient, dto.index, dto.start, deleteExecutorService));
+        ScrollService.latch.await();
         LocalDateTime finishTime = LocalDateTime.now();
         noTaskExecuting = true;
 
-        /** 5、Report */
+        /** 3、Report */
         Supplier<StringBuffer> summaryReport = () -> {
             StringBuffer report = new StringBuffer();
             report.append("\nTask execute report");
-            report.append(String.format("\n---Deal with rowkey records: %s", scrollQueryCount));
-            report.append(String.format("\n---Delete data records: %s", duplicateDataCount));
+            report.append(String.format("\n---Deal with rowkey records: %s", ScrollService.RowkeySet.size()));
+            report.append(String.format("\n---Delete data records: %s", DeleteService.delCount.longValue()));
             report.append(String.format("\n---Start time: %s", startTime.toString()));
             report.append(String.format("\n---Finish time: %s", finishTime.toString()));
-            report.append(String.format("\n---Scroll query time consuming(Millisecond): %s", Duration.between(startTime, scrollQueryTime).toMillis()));
-            report.append(String.format("\n---Find duplicate data time consuming(Millisecond): %s", Duration.between(scrollQueryTime, findDuplicateTime).toMillis()));
-            report.append(String.format("\n---Delete duplicate data time consuming(Millisecond): %s", Duration.between(findDuplicateTime, finishTime).toMillis()));
             report.append(String.format("\n---Count time consuming(Millisecond): %s", Duration.between(startTime, finishTime).toMillis()));
             return report;
         };
-        return summaryReport.get().toString();
+        StringBuffer report = summaryReport.get();
+        log.info(report.toString());
+        return report.toString();
     }
 
     @Data
