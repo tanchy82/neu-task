@@ -77,7 +77,6 @@ public class DeleteService implements Runnable {
                     .forEach(id ->  request.add(new DeleteRequest(index,index,id)));
             Stream.of(request).map(BulkRequest::numberOfActions).filter(integer -> integer > 0)
                     .forEach(integer -> { delCount.getAndAdd(integer);esClient.bulk(request);});
-            System.gc();
             rowkeyCount.getAndDecrement();
             log.info(String.format("Scroll Query rowkey count %s, delete Data: delete %s , Delete count %s",
                     ScrollService.RowkeySet.size(),request.numberOfActions(), delCount.get()));
