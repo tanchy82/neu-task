@@ -8,9 +8,7 @@ import org.elasticsearch.index.query.BoolQueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.search.Scroll;
 
-import java.util.HashSet;
 import java.util.Objects;
-import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -93,7 +91,7 @@ public class ScrollService implements Runnable {
             log.info(String.format("Finish scroll query %s ~ %s ... ", startDate, endDate));
             isFinishScroll = true;
             carry.accept(delRowKeyQueue);
-            while (delRowKey.get() > 0) { }
+            while (RowkeySet.size() != DeleteService.rowkeyCount.get()) { }
         } catch (Exception e) {
             e.printStackTrace();
         } finally {
