@@ -65,7 +65,7 @@ public class DeleteDuplicateDataApi {
 
         /** 2、Task */
         ScrollService.latch = new CountDownLatch(1);
-        scrollExecutorService.execute(new ScrollService(esClient, dto.index, dto.start, deleteExecutorService));
+        scrollExecutorService.execute(new ScrollService(esClient, dto.index, dto.start, dto.end, deleteExecutorService));
         ScrollService.latch.await();
         LocalDateTime finishTime = LocalDateTime.now();
         noTaskExecuting = true;
@@ -75,7 +75,7 @@ public class DeleteDuplicateDataApi {
             StringBuffer report = new StringBuffer();
             report.append("\nTask execute report");
             report.append(String.format("\n---Deal with rowkey records: %s", ScrollService.RowkeySet.size()));
-            report.append(String.format("\n---Delete data records: %s", DeleteService.delCount.longValue()));
+            report.append(String.format("\n---Delete data records: %s", DeleteService.delCount.get()));
             report.append(String.format("\n---Start time: %s", startTime.toString()));
             report.append(String.format("\n---Finish time: %s", finishTime.toString()));
             report.append(String.format("\n---Count time consuming(Millisecond): %s", Duration.between(startTime, finishTime).toMillis()));

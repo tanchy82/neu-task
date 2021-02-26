@@ -1,6 +1,7 @@
 package com.oldtan.neutask.deleteduplicatedata;
 
 import cn.hutool.core.collection.CollectionUtil;
+import lombok.extern.slf4j.Slf4j;
 import org.elasticsearch.action.bulk.BulkRequest;
 import org.elasticsearch.action.delete.DeleteRequest;
 import org.elasticsearch.action.search.SearchRequest;
@@ -17,6 +18,7 @@ import org.elasticsearch.search.sort.SortOrder;
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
@@ -26,6 +28,7 @@ import java.util.stream.Stream;
  * @Author: tanchuyue
  * @Date: 21-2-25
  */
+@Slf4j
 public class DeleteService implements Runnable {
 
     public static volatile AtomicLong delCount = new AtomicLong(0);
@@ -36,12 +39,15 @@ public class DeleteService implements Runnable {
 
     public static final String rowkeyFiled = "rowkey";
 
-    public final String rowkeyValue;
+    public final Set<String> rowkeySet;
 
-    public DeleteService(TransportClient esClient, String index, String rowkeyValue) {
+    public static volatile AtomicLong rowkeyCount = new AtomicLong(0L);
+
+    public DeleteService(TransportClient esClient, String index, Set<String> rowkeySet) {
         this.esClient = esClient;
         this.index = index;
-        this.rowkeyValue = rowkeyValue;
+        this.rowkeySet = rowkeySet;
+        ScrollService.delRowKey.getAndIncrement();
     }
 
     @Override
@@ -52,7 +58,7 @@ public class DeleteService implements Runnable {
                     new SearchRequest(index).types(index).source(new SearchSourceBuilder()
                             .query(QueryBuilders.boolQuery()
                                     .must(QueryBuilders.existsQuery("CREATE_DATE"))
-                                    .filter(QueryBuilders.termsQuery(rowkeyFiled, rowkeyValue)))
+                                    .filter(QueryBuilders.termsQuery(rowkeyFiled, rowkeySet)))
                             .aggregation(AggregationBuilders.terms("Agg").field(rowkeyFiled + ".keyword").minDocCount(2)
                                     .subAggregation(AggregationBuilders.topHits("Top")
                                             .explain(true).fetchSource(true).size(20).from(1).sort("CREATE_DATE.keyword", SortOrder.DESC)
@@ -70,8 +76,11 @@ public class DeleteService implements Runnable {
                     .map(SearchHit::getId)
                     .forEach(id ->  request.add(new DeleteRequest(index,index,id)));
             Stream.of(request).map(BulkRequest::numberOfActions).filter(integer -> integer > 0)
-                    .forEach(integer -> {delCount.getAndAdd(integer);esClient.bulk(request);});
+                    .forEach(integer -> { delCount.getAndAdd(integer);esClient.bulk(request);});
             System.gc();
+            rowkeyCount.getAndDecrement();
+            log.info(String.format("Scroll Query rowkey count %s, delete Data: delete %s , Delete count %s",
+                    ScrollService.RowkeySet.size(),request.numberOfActions(), delCount.get()));
         }catch (Exception e){
             e.printStackTrace();
         }finally {
