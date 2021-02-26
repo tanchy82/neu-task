@@ -86,7 +86,7 @@ public class ScrollService implements Runnable {
                         .forEach((s) -> {
                             RowkeySet.add(s);
                             delRowKeyQueue.offer(s);
-                            carry.accept(delRowKeyQueue);
+                            if (delRowKeyQueue.size() > 1000)  carry.accept(delRowKeyQueue);
                         });
                 scrollResp = esClient.prepareSearchScroll(scrollResp.getScrollId()).setScroll(new TimeValue(60000)).execute().actionGet();
             } while (scrollResp.getHits().getHits().length != 0);

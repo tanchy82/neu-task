@@ -4,6 +4,8 @@ import cn.hutool.core.collection.CollectionUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.elasticsearch.action.bulk.BulkRequest;
 import org.elasticsearch.action.delete.DeleteRequest;
+import org.elasticsearch.action.search.MultiSearchRequest;
+import org.elasticsearch.action.search.MultiSearchResponse;
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.client.transport.TransportClient;
 import org.elasticsearch.common.unit.TimeValue;
@@ -54,17 +56,20 @@ public class DeleteService implements Runnable {
     public void run() {
         try {
             BulkRequest request = new BulkRequest().timeout(TimeValue.timeValueMinutes(2));
-            Stream.of(esClient.search(
+            MultiSearchRequest multiSearchRequest = new MultiSearchRequest();
+            rowkeySet.stream().map(s ->
                     new SearchRequest(index).types(index).source(new SearchSourceBuilder()
                             .query(QueryBuilders.boolQuery()
                                     .must(QueryBuilders.existsQuery("CREATE_DATE"))
-                                    .filter(QueryBuilders.termsQuery(rowkeyFiled, rowkeySet)))
+                                    .filter(QueryBuilders.termsQuery(rowkeyFiled, s)))
                             .aggregation(AggregationBuilders.terms("Agg").field(rowkeyFiled + ".keyword").minDocCount(2)
                                     .subAggregation(AggregationBuilders.topHits("Top")
                                             .explain(true).fetchSource(true).size(20).from(1).sort("CREATE_DATE.keyword", SortOrder.DESC)
                                             .fetchSource(new String[]{rowkeyFiled, "CREATE_DATE"}, new String[]{})))
                             .fetchSource(false).size(0).timeout(new TimeValue(60, TimeUnit.SECONDS))))
-                    .get()).filter(Objects::nonNull)
+                    .forEach(multiSearchRequest::add);
+            Stream.of(esClient.multiSearch(multiSearchRequest)
+                    .get().getResponses()).filter(Objects::nonNull).map(MultiSearchResponse.Item::getResponse)
                     .filter(searchResponse -> Optional.ofNullable(searchResponse.getAggregations().get("Agg")).isPresent())
                     .map(searchResponse -> (Terms) searchResponse.getAggregations().get("Agg"))
                     .map(Terms::getBuckets)
@@ -77,7 +82,7 @@ public class DeleteService implements Runnable {
                     .forEach(id ->  request.add(new DeleteRequest(index,index,id)));
             Stream.of(request).map(BulkRequest::numberOfActions).filter(integer -> integer > 0)
                     .forEach(integer -> { delCount.getAndAdd(integer);esClient.bulk(request);});
-            rowkeyCount.getAndDecrement();
+            rowkeyCount.getAndAdd(rowkeySet.size());
             log.info(String.format("Scroll Query rowkey count %s, delete Data: delete %s , Delete count %s",
                     ScrollService.RowkeySet.size(),request.numberOfActions(), delCount.get()));
         }catch (Exception e){
