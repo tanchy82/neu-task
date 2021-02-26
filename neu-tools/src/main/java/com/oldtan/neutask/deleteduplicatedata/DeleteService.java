@@ -70,6 +70,7 @@ public class DeleteService implements Runnable {
                     .forEach(multiSearchRequest::add);
             Stream.of(esClient.multiSearch(multiSearchRequest)
                     .get().getResponses()).filter(Objects::nonNull).map(MultiSearchResponse.Item::getResponse)
+                    .filter(Objects::nonNull)
                     .filter(searchResponse -> Optional.ofNullable(searchResponse.getAggregations().get("Agg")).isPresent())
                     .map(searchResponse -> (Terms) searchResponse.getAggregations().get("Agg"))
                     .map(Terms::getBuckets)
