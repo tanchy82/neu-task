@@ -1,0 +1,11 @@
+server:
+  port: 16666
+  undertow:
+    buffer-size: 2048
+    threads:
+      io: 4
+
+logging:
+  config: classpath:config/logback-neu.xml
+  level:
+    root: info
