@@ -6,6 +6,12 @@ import com.oldtan.his.domain.RegisterStatus.RegisterStatus
 
 /**
   * 就诊挂号 Root Domain
+  * 1、领域层分析属性可变、不可变的应对策略
+  *    scala代码：可以通过 val不可变、var可变 的声明进行领域层属性的是否可修改编辑在代码编译层进行控制
+  *    java代码：则需要对每个属性进行相应的Assert断言校验
+  * 2、领域层分析动作通用、个性化定制的应对策略
+  *    scala代码：在领域层暴露的动作接口，我们将根据高阶函数式编程方式进行个性化业务的接口扩展
+  *    java代码: 同样可以实现高阶函数式编程, e.g.: java.util.function.Function
   * @param p 患者
   * @param d 医生
   * @param de 就诊科室
